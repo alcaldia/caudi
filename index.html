@@ -186,7 +186,7 @@ const P = {
   history:  "artifacts/generador-8b0f4/public/data/history",
   radicados:"artifacts/generador-8b0f4/public/data/radicados"
 };
-const HISTORY_LIMIT = 80;
+const HISTORY_LIMIT = 30;   // se cargan de a 30, con botón "cargar más"
 
 /* Festivos Colombia (para fecha de vencimiento +15 días hábiles) */
 const FESTIVOS = ["2026-01-01","2026-01-12","2026-03-23","2026-04-02","2026-04-03","2026-05-01","2026-05-18","2026-06-08","2026-06-15","2026-06-29","2026-07-20","2026-08-07","2026-08-17","2026-10-12","2026-11-02","2026-11-16","2026-12-08","2026-12-25","2027-01-01","2027-01-11"];
@@ -329,6 +329,21 @@ async function tryResume(){
 function logout(){ localStorage.removeItem("caudi_session"); location.reload(); }
 
 /* ══════════ DATOS ══════════ */
+let _histCursor = null;
+/* CLAVE PARA CELULAR: los documentos del historial traen el PDF completo en
+   base64 (pdf_b64). Cargar muchos a la vez agota la RAM del navegador móvil
+   y la pestaña se reinicia. Por eso aquí se eliminan los campos *_b64 de la
+   memoria y el PDF se descarga individualmente solo al tocar "Ver PDF". */
+function stripB64(d){
+  const x = d.data(); let tienePdf = false;
+  for(const k of Object.keys(x)){
+    if(k.endsWith("_b64") || (typeof x[k]==="string" && x[k].length>20000)){
+      if(k==="pdf_b64") tienePdf = true;
+      delete x[k];
+    }
+  }
+  return {id:d.id, _tienePdf:tienePdf, ...x};
+}
 async function refreshAll(manual){
   if(manual) toast("Actualizando…");
   try{
@@ -340,7 +355,8 @@ async function refreshAll(manual){
       db.doc(P.settings).get()
     ]);
     RADICADOS = rs.docs.map(d=>({_id:d.id, ...d.data()}));
-    HISTORY   = hs.docs.map(d=>({id:d.id, ...d.data()}));
+    HISTORY   = hs.docs.map(stripB64);
+    _histCursor = hs.docs.length>=HISTORY_LIMIT ? hs.docs[hs.docs.length-1] : null;
     HISTORY.sort((a,b)=>(b.fecha_generacion||"").localeCompare(a.fecha_generacion||""));
     USERS     = us.docs.map(d=>({username:d.id, ...d.data()}));
     BARRIOS   = (bs.exists && bs.data().lista) || [];
@@ -627,11 +643,24 @@ function paintCertList(){
       <div class="sub">CC ${esc(h["Número"]||"—")} · ${esc(h.Barrio||"")}<br>${fmtFecha(h.fecha_generacion)} · ${esc(h.generadoPorNombre||h.generadoPorUsername||"")}</div>
     </div>`;
   }).join("") : `<div class="empty"><span class="big">📜</span>No hay certificados que coincidan</div>`;
+  if(_histCursor && !q) $("certList").innerHTML += `<button class="btn gray wide" style="width:100%;margin-top:6px" onclick="cargarMasCerts()">⬇️ Cargar 30 certificados más</button>`;
+}
+async function cargarMasCerts(){
+  if(!_histCursor) return;
+  toast("Cargando…");
+  try{
+    const hs = await db.collection(P.history).orderBy("fecha_generacion","desc")
+      .startAfter(_histCursor).limit(HISTORY_LIMIT).get();
+    HISTORY.push(...hs.docs.map(stripB64));
+    _histCursor = hs.docs.length>=HISTORY_LIMIT ? hs.docs[hs.docs.length-1] : null;
+    paintCertList();
+    toast(`✓ ${hs.docs.length} certificados más`);
+  }catch(e){ toast("Error: "+e.message); }
 }
 function openCert(idx){
   const h = HISTORY[idx]; if(!h) return;
   const ent = !!h.entregado;
-  const tienePdf = !!(h.pdf_b64 || h.pdf_url);
+  const tienePdf = !!(h._tienePdf || h.pdf_url || h.pdf_b64);
   const tel = h.telefono_ciudadano||"";
   sheet(`📜 ${h.IsComercial?"Comercial":"Residencial"} N° ${esc(h.Consecutivo||"?")}`, `
     <div style="margin-bottom:8px"><span class="chip" style="background:${ent?"#d1fae5":"#ffedd5"};color:${ent?"#065f46":"#9a3412"};font-size:12px">${ent?"ENTREGADO":"PENDIENTE DE ENTREGA"}</span></div>
@@ -652,15 +681,23 @@ function openCert(idx){
       ${tel? `<button class="btn violet wide" onclick="window.open('https://wa.me/57${esc(tel.replace(/[^0-9]/g,""))}','_blank')">💬 WhatsApp al ciudadano</button>`:""}
     </div>`);
 }
-function verPdfCert(idx){
+async function verPdfCert(idx){
   const h = HISTORY[idx];
   try{
     if(h.pdf_url){ window.open(resolverURL(h.pdf_url, h.Radicado||h.id, "pdf_respuesta"),"_blank"); return; }
-    const bin = atob(h.pdf_b64);
+    toast("Descargando PDF…");
+    const snap = await db.collection(P.history).doc(h.id).get();
+    const b64 = snap.exists ? snap.data().pdf_b64 : null;
+    if(!b64){ toast("Este certificado no tiene PDF guardado"); return; }
+    const bin = atob(b64);
     const bytes = new Uint8Array(bin.length);
     for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
     const url = URL.createObjectURL(new Blob([bytes],{type:"application/pdf"}));
-    window.open(url,"_blank");
+    const a = document.createElement("a");
+    a.href = url; a.target = "_blank";
+    a.download = `certificado_${(h.IsComercial?"COM":"RES")}_${h.Consecutivo||""}.pdf`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 60000);
   }catch(e){ toast("No se pudo abrir el PDF: "+e.message); }
 }
 function marcarEntregado(idx){

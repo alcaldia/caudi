@@ -167,12 +167,12 @@ nav.tabbar button.active{color:var(--primary)}
    Es el mismo que usa la PWA de visitadores.
 ══════════════════════════════════════════════════════════════ */
 const firebaseConfig = {
-  apiKey: "PEGA_AQUI_TU_API_KEY",
+  apiKey: "AIzaSyDONjZdM9RcPN20OxmlrO7Ns5I2-HoqET0",
   authDomain: "generador-8b0f4.firebaseapp.com",
   projectId: "generador-8b0f4",
-  storageBucket: "generador-8b0f4.appspot.com",
-  messagingSenderId: "PEGA_AQUI",
-  appId: "PEGA_AQUI"
+  storageBucket: "generador-8b0f4.firebasestorage.app",
+  messagingSenderId: "81617541502",
+  appId: "1:81617541502:web:d806aca48a23c75f7b7b2f"
 };
 
 const CLOUDINARY_CLOUD = "dsv6yewzd";
@@ -330,37 +330,72 @@ function logout(){ localStorage.removeItem("caudi_session"); location.reload(); 
 
 /* ══════════ DATOS ══════════ */
 let _histCursor = null;
-/* CLAVE PARA CELULAR: los documentos del historial traen el PDF completo en
-   base64 (pdf_b64). Cargar muchos a la vez agota la RAM del navegador móvil
-   y la pestaña se reinicia. Por eso aquí se eliminan los campos *_b64 de la
-   memoria y el PDF se descarga individualmente solo al tocar "Ver PDF". */
-function stripB64(d){
-  const x = d.data(); let tienePdf = false;
+/* CLAVE PARA CELULAR: tanto el historial como los radicados pueden traer PDFs
+   completos en base64 dentro del documento (pdf_b64 / pdf_respuesta). Cargar
+   todo de golpe agota la RAM del navegador móvil y la pestaña se reinicia.
+   Por eso: se carga por tandas, se eliminan los campos gigantes apenas llegan,
+   y los PDFs se descargan individualmente solo al tocar "Ver PDF". */
+function stripBig(x){
+  const flags = {};
   for(const k of Object.keys(x)){
-    if(k.endsWith("_b64") || (typeof x[k]==="string" && x[k].length>20000)){
-      if(k==="pdf_b64") tienePdf = true;
+    const v = x[k];
+    if(typeof v === "string" && (k.endsWith("_b64") || v.length > 20000)){
+      flags[k] = true;
       delete x[k];
     }
   }
-  return {id:d.id, _tienePdf:tienePdf, ...x};
+  return flags;
+}
+function stripB64(d){
+  const x = d.data();
+  const flags = stripBig(x);
+  return {id:d.id, _tienePdf: !!flags.pdf_b64, ...x};
+}
+function stripRad(d){
+  const x = d.data();
+  const flags = stripBig(x);
+  return {_id:d.id, _pdfRespEmbebido: !!flags.pdf_respuesta, ...x};
+}
+async function cargarRadicados(onProgress){
+  const BATCH = 60;
+  const col = db.collection(P.radicados).orderBy(firebase.firestore.FieldPath.documentId());
+  let cursor = null, out = [];
+  while(true){
+    let q = col.limit(BATCH);
+    if(cursor) q = q.startAfter(cursor);
+    const snap = await q.get();
+    if(snap.empty) break;
+    for(const d of snap.docs) out.push(stripRad(d));
+    if(onProgress) onProgress(out.length);
+    if(snap.docs.length < BATCH) break;
+    cursor = snap.docs[snap.docs.length-1];
+  }
+  return out;
 }
 async function refreshAll(manual){
   if(manual) toast("Actualizando…");
+  const showProgress = !RADICADOS.length;   // primera carga: mostrar avance
   try{
-    const [rs, hs, us, bs, ss] = await Promise.all([
-      db.collection(P.radicados).get(),
-      db.collection(P.history).orderBy("fecha_generacion","desc").limit(HISTORY_LIMIT).get().catch(()=>db.collection(P.history).limit(HISTORY_LIMIT).get()),
+    // 1) Datos livianos
+    const [us, bs, ss] = await Promise.all([
       db.collection(P.users).get(),
       db.doc(P.barrios).get(),
       db.doc(P.settings).get()
     ]);
-    RADICADOS = rs.docs.map(d=>({_id:d.id, ...d.data()}));
-    HISTORY   = hs.docs.map(stripB64);
-    _histCursor = hs.docs.length>=HISTORY_LIMIT ? hs.docs[hs.docs.length-1] : null;
+    USERS    = us.docs.map(d=>({username:d.id, ...d.data()}));
+    BARRIOS  = (bs.exists && bs.data().lista) || [];
+    SETTINGS = ss.exists? ss.data() : {};
+    // 2) Historial (30, sin base64)
+    if(showProgress) $("main").innerHTML = '<div class="loader"></div><p style="text-align:center;color:var(--muted);font-size:13px">Cargando certificados…</p>';
+    const hs = await db.collection(P.history).orderBy("fecha_generacion","desc").limit(HISTORY_LIMIT).get()
+      .catch(()=>db.collection(P.history).limit(HISTORY_LIMIT).get());
+    HISTORY = hs.docs.map(stripB64);
     HISTORY.sort((a,b)=>(b.fecha_generacion||"").localeCompare(a.fecha_generacion||""));
-    USERS     = us.docs.map(d=>({username:d.id, ...d.data()}));
-    BARRIOS   = (bs.exists && bs.data().lista) || [];
-    SETTINGS  = ss.exists? ss.data() : {};
+    _histCursor = hs.docs.length>=HISTORY_LIMIT ? hs.docs[hs.docs.length-1] : null;
+    // 3) Radicados por tandas (sin base64)
+    RADICADOS = await cargarRadicados(n=>{
+      if(showProgress) $("main").innerHTML = `<div class="loader"></div><p style="text-align:center;color:var(--muted);font-size:13px">Cargando radicados… ${n}</p>`;
+    });
     lastFetch = Date.now();
     render();
     if(manual) toast("✓ Datos actualizados");
@@ -481,7 +516,8 @@ function openRad(rnum){
   const fotoKeys = Object.keys(fotos);
   const tr = TRANSICIONES[r.estado];
   const pdfE = r.pdf_entrada? resolverURL(r.pdf_entrada, rnum, "pdf_entrada"):"";
-  const pdfR = r.pdf_respuesta && !String(r.pdf_respuesta).startsWith("JVBER")? resolverURL(r.pdf_respuesta, rnum, "pdf_respuesta"):"";
+  const pdfR = (r.pdf_respuesta && String(r.pdf_respuesta).startsWith("http"))? resolverURL(r.pdf_respuesta, rnum, "pdf_respuesta"):"";
+  const pdfREmbebido = r._pdfRespEmbebido || (r.pdf_respuesta && !String(r.pdf_respuesta).startsWith("http"));
   const aud = (r.auditoria||[]).slice().reverse();
 
   sheet(`📂 ${esc(rnum)}`, `
@@ -506,6 +542,7 @@ function openRad(rnum){
     <div class="btnRow">
       ${pdfE? `<button class="btn gray" onclick="window.open('${esc(pdfE)}','_blank')">📄 PDF entrada</button>`:""}
       ${pdfR? `<button class="btn gray" onclick="window.open('${esc(pdfR)}','_blank')">📑 PDF respuesta</button>`:""}
+      ${!pdfR && pdfREmbebido? `<button class="btn gray" onclick="verPdfRespuesta('${esc(rnum)}')">📑 PDF respuesta</button>`:""}
       ${tr && (r.estado!=="PENDIENTE_FIRMA"? can("acc_editar"): can("acc_marcar_firmado"))?
         `<button class="btn green wide" onclick="avanzarEstado('${esc(rnum)}')">➡️ ${tr[1]}</button>`:""}
       ${r.estado==="PENDIENTE" && can("acc_asignar")? `<button class="btn violet wide" onclick="asignarVisita('${esc(rnum)}')">🚶 Asignar visita</button>`:""}
@@ -689,16 +726,28 @@ async function verPdfCert(idx){
     const snap = await db.collection(P.history).doc(h.id).get();
     const b64 = snap.exists ? snap.data().pdf_b64 : null;
     if(!b64){ toast("Este certificado no tiene PDF guardado"); return; }
-    const bin = atob(b64);
-    const bytes = new Uint8Array(bin.length);
-    for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
-    const url = URL.createObjectURL(new Blob([bytes],{type:"application/pdf"}));
-    const a = document.createElement("a");
-    a.href = url; a.target = "_blank";
-    a.download = `certificado_${(h.IsComercial?"COM":"RES")}_${h.Consecutivo||""}.pdf`;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url), 60000);
+    abrirB64(b64, `certificado_${(h.IsComercial?"COM":"RES")}_${h.Consecutivo||""}.pdf`);
   }catch(e){ toast("No se pudo abrir el PDF: "+e.message); }
+}
+async function verPdfRespuesta(rnum){
+  try{
+    toast("Descargando PDF…");
+    const snap = await radRef(rnum).get();
+    const v = snap.exists ? snap.data().pdf_respuesta : null;
+    if(!v){ toast("Este radicado no tiene PDF de respuesta"); return; }
+    if(String(v).startsWith("http")){ window.open(resolverURL(v, rnum, "pdf_respuesta"),"_blank"); return; }
+    abrirB64(v, `respuesta_${sanId(rnum)}.pdf`);
+  }catch(e){ toast("No se pudo abrir el PDF: "+e.message); }
+}
+function abrirB64(b64, nombre){
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  const url = URL.createObjectURL(new Blob([bytes],{type:"application/pdf"}));
+  const a = document.createElement("a");
+  a.href = url; a.target = "_blank"; a.download = nombre;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 60000);
 }
 function marcarEntregado(idx){
   const h = HISTORY[idx];

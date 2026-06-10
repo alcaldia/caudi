@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#1e3a8a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>CauDi Móvil — Caucasia Digital</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --primary:#1d4ed8; --primary-dark:#1e3a8a; --primary-light:#dbeafe;
+  --accent:#7c3aed; --success:#059669; --danger:#dc2626; --warning:#d97706;
+  --surface:#ffffff; --bg:#f1f5f9; --border:#e2e8f0; --text:#1e293b; --muted:#64748b;
+  --radius:14px; --nav-h:62px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:15px;overscroll-behavior-y:contain}
+h1,h2,h3,.brand{font-family:'Sora',sans-serif}
+button{font-family:inherit;border:none;cursor:pointer;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:15px;width:100%;padding:11px 12px;border:1.5px solid var(--border);border-radius:10px;background:#fff;color:var(--text)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary)}
+label{font-size:12px;font-weight:600;color:var(--muted);display:block;margin:10px 0 4px;text-transform:uppercase;letter-spacing:.4px}
+.hidden{display:none!important}
+
+/* ===== LOGIN ===== */
+#loginScreen{min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;
+  background:linear-gradient(160deg,#1e3a8a 0%,#1d4ed8 55%,#7c3aed 130%)}
+.loginCard{background:#fff;border-radius:20px;padding:28px 22px;width:100%;max-width:380px;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+.loginLogo{text-align:center;margin-bottom:18px}
+.loginLogo .brand{font-size:30px;font-weight:800;color:var(--primary-dark);letter-spacing:-1px}
+.loginLogo .brand span{color:var(--accent)}
+.loginLogo p{font-size:12px;color:var(--muted);margin-top:2px}
+.btnPrimary{width:100%;background:var(--primary);color:#fff;font-weight:700;padding:13px;border-radius:11px;margin-top:18px;font-size:15px}
+.btnPrimary:active{background:var(--primary-dark)}
+.btnPrimary:disabled{opacity:.5}
+#loginMsg{color:var(--danger);font-size:13px;text-align:center;margin-top:12px;min-height:18px;font-weight:600}
+
+/* ===== APP SHELL ===== */
+#app{display:flex;flex-direction:column;min-height:100dvh}
+header.appHeader{position:sticky;top:0;z-index:50;background:linear-gradient(135deg,var(--primary-dark),var(--primary));
+  color:#fff;padding:calc(env(safe-area-inset-top) + 12px) 16px 12px;display:flex;align-items:center;gap:10px}
+header .brand{font-size:19px;font-weight:800;flex:1}
+header .brand span{color:#c4b5fd}
+header .userChip{font-size:12px;background:rgba(255,255,255,.18);padding:5px 11px;border-radius:99px;font-weight:600;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.iconBtn{background:rgba(255,255,255,.18);color:#fff;border-radius:10px;width:36px;height:36px;font-size:17px;flex:none}
+main{flex:1;padding:14px 14px calc(var(--nav-h) + env(safe-area-inset-bottom) + 20px)}
+
+/* bottom nav */
+nav.tabbar{position:fixed;bottom:0;left:0;right:0;z-index:50;background:#fff;border-top:1px solid var(--border);
+  display:flex;height:calc(var(--nav-h) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom)}
+nav.tabbar button{flex:1;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--muted);font-size:10.5px;font-weight:600}
+nav.tabbar button .ico{font-size:20px}
+nav.tabbar button.active{color:var(--primary)}
+
+/* ===== COMPONENTS ===== */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px}
+.card .titleRow{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.card .titleRow b{font-size:15px}
+.card .sub{font-size:13px;color:var(--muted);margin-top:3px;line-height:1.45}
+.chip{display:inline-block;font-size:10.5px;font-weight:700;padding:4px 9px;border-radius:99px;letter-spacing:.3px;white-space:nowrap}
+.searchRow{display:flex;gap:8px;margin-bottom:10px}
+.searchRow input{flex:1}
+.filterChips{display:flex;gap:7px;overflow-x:auto;padding-bottom:8px;margin-bottom:6px;scrollbar-width:none}
+.filterChips::-webkit-scrollbar{display:none}
+.filterChips button{flex:none;background:#fff;border:1.5px solid var(--border);border-radius:99px;padding:7px 13px;font-size:12px;font-weight:600;color:var(--muted)}
+.filterChips button.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.fab{position:fixed;right:18px;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 18px);z-index:40;
+  width:56px;height:56px;border-radius:18px;background:var(--primary);color:#fff;font-size:26px;box-shadow:0 8px 22px rgba(29,78,216,.45)}
+.empty{text-align:center;color:var(--muted);padding:46px 20px;font-size:14px}
+.empty .big{font-size:38px;display:block;margin-bottom:8px}
+.secTitle{font-size:17px;font-weight:700;margin:6px 0 12px;display:flex;align-items:center;justify-content:space-between}
+.secTitle small{font-size:12px;color:var(--muted);font-weight:600}
+
+/* stats */
+.statGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.stat{border-radius:var(--radius);padding:14px;color:#fff;position:relative;overflow:hidden}
+.stat .v{font-family:'Sora';font-size:28px;font-weight:800}
+.stat .l{font-size:11.5px;font-weight:600;opacity:.92;margin-top:2px}
+.barChart{display:flex;align-items:flex-end;gap:8px;height:110px;padding:6px 2px 0}
+.barChart .bcol{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;height:100%;justify-content:flex-end}
+.barChart .bar{width:100%;max-width:34px;background:linear-gradient(180deg,var(--primary),var(--primary-dark));border-radius:6px 6px 0 0;min-height:4px}
+.barChart .bl{font-size:10px;color:var(--muted);font-weight:600}
+.barChart .bv{font-size:11px;font-weight:700;color:var(--primary-dark)}
+
+/* modal sheet */
+.sheetWrap{position:fixed;inset:0;z-index:100;background:rgba(15,23,42,.55);display:flex;align-items:flex-end;animation:fade .15s}
+.sheet{background:var(--bg);width:100%;max-height:92dvh;border-radius:22px 22px 0 0;display:flex;flex-direction:column;animation:up .22s ease-out}
+.sheet .sheetHead{padding:14px 16px;display:flex;align-items:center;gap:10px;background:#fff;border-radius:22px 22px 0 0;border-bottom:1px solid var(--border)}
+.sheet .sheetHead h3{flex:1;font-size:16px}
+.sheet .sheetBody{overflow-y:auto;padding:14px 16px calc(env(safe-area-inset-bottom) + 22px)}
+@keyframes up{from{transform:translateY(60px);opacity:.4}to{transform:none;opacity:1}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px dashed var(--border);font-size:13.5px}
+.kv b{color:var(--muted);font-weight:600;flex:none}
+.kv span{text-align:right;word-break:break-word}
+.btnRow{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:14px}
+.btn{padding:12px;border-radius:11px;font-weight:700;font-size:13.5px;color:#fff;background:var(--primary)}
+.btn.green{background:var(--success)} .btn.red{background:var(--danger)} .btn.amber{background:var(--warning)}
+.btn.violet{background:var(--accent)} .btn.gray{background:#fff;color:var(--text);border:1.5px solid var(--border)}
+.btn.wide{grid-column:1/-1}
+.btn:disabled{opacity:.45}
+.fotoGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.fotoGrid a{display:block;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:#fff}
+.fotoGrid img{width:100%;height:88px;object-fit:cover;display:block}
+.fotoGrid .fl{font-size:10px;text-align:center;padding:4px;color:var(--muted);font-weight:600;text-transform:capitalize}
+.audItem{background:#fff;border:1px solid var(--border);border-radius:10px;padding:9px 11px;margin-bottom:7px;font-size:12.5px}
+.audItem b{color:var(--primary-dark)}
+.audItem .ts{font-size:11px;color:var(--muted)}
+.permGrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
+.permGrid label.pchk{display:flex;align-items:center;gap:7px;font-size:11.5px;text-transform:none;letter-spacing:0;background:#fff;border:1px solid var(--border);border-radius:9px;padding:8px;margin:0;color:var(--text)}
+.permGrid input{width:auto}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h) + 26px);z-index:200;background:#1e293b;color:#fff;
+  padding:11px 18px;border-radius:99px;font-size:13.5px;font-weight:600;opacity:0;transition:.25s;pointer-events:none;max-width:88vw;text-align:center}
+#toast.show{opacity:1}
+.loader{border:3px solid var(--primary-light);border-top-color:var(--primary);border-radius:50%;width:30px;height:30px;animation:spin .8s linear infinite;margin:30px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+.moreList{display:flex;flex-direction:column;gap:9px}
+.moreList button{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:15px;display:flex;align-items:center;gap:12px;font-size:14.5px;font-weight:600;color:var(--text);text-align:left}
+.moreList .ico{font-size:20px;width:26px;text-align:center}
+.notice{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:12px;line-height:1.5}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<div id="loginScreen">
+  <div class="loginCard">
+    <div class="loginLogo">
+      <div class="brand">Cau<span>Di</span></div>
+      <p>Caucasia Digital · Certificados de Estratificación<br>Alcaldía de Caucasia — Versión Móvil</p>
+    </div>
+    <label>Usuario</label>
+    <input id="lgUser" autocomplete="username" autocapitalize="none">
+    <label>Contraseña</label>
+    <input id="lgPass" type="password" autocomplete="current-password">
+    <button class="btnPrimary" id="lgBtn" onclick="doLogin()">Ingresar</button>
+    <div id="loginMsg"></div>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app" class="hidden">
+  <header class="appHeader">
+    <div class="brand">Cau<span>Di</span> Móvil</div>
+    <div class="userChip" id="hUser"></div>
+    <button class="iconBtn" onclick="refreshAll(true)" title="Actualizar">⟳</button>
+  </header>
+  <main id="main"></main>
+  <button class="fab hidden" id="fab">＋</button>
+  <nav class="tabbar" id="tabbar"></nav>
+</div>
+
+<div id="sheetHost"></div>
+<div id="toast"></div>
+
+<!-- Firebase compat SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+/* ══════════════════════════════════════════════════════════════
+   CONFIGURACIÓN — PEGA AQUÍ TU firebaseConfig
+   (Consola Firebase → Configuración del proyecto → Tus apps → Web)
+   Es el mismo que usa la PWA de visitadores.
+══════════════════════════════════════════════════════════════ */
+const firebaseConfig = {
+  apiKey: "PEGA_AQUI_TU_API_KEY",
+  authDomain: "generador-8b0f4.firebaseapp.com",
+  projectId: "generador-8b0f4",
+  storageBucket: "generador-8b0f4.appspot.com",
+  messagingSenderId: "PEGA_AQUI",
+  appId: "PEGA_AQUI"
+};
+
+const CLOUDINARY_CLOUD = "dsv6yewzd";
+const CLOUDINARY_PRESET = "caudi_unsigned";
+
+/* Rutas Firestore — idénticas a main_v920.py */
+const P = {
+  settings: "artifacts/generador-8b0f4/public/data/config/settings",
+  barrios:  "artifacts/generador-8b0f4/public/data/config/barrios",
+  users:    "artifacts/generador-8b0f4/public/data/users",
+  history:  "artifacts/generador-8b0f4/public/data/history",
+  radicados:"artifacts/generador-8b0f4/public/data/radicados"
+};
+const HISTORY_LIMIT = 80;
+
+/* Festivos Colombia (para fecha de vencimiento +15 días hábiles) */
+const FESTIVOS = ["2026-01-01","2026-01-12","2026-03-23","2026-04-02","2026-04-03","2026-05-01","2026-05-18","2026-06-08","2026-06-15","2026-06-29","2026-07-20","2026-08-07","2026-08-17","2026-10-12","2026-11-02","2026-11-16","2026-12-08","2026-12-25","2027-01-01","2027-01-11"];
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+/* ══════════ ESTADO GLOBAL ══════════ */
+let USER = null, PERMS = {}, RADICADOS = [], HISTORY = [], USERS = [], BARRIOS = [], SETTINGS = {};
+let tab = "inicio", radFilter = "TODOS", lastFetch = 0;
+
+const ESTADOS = {
+  PENDIENTE:        {l:"Pendiente",        bg:"#ffedd5", fg:"#9a3412"},
+  EN_VISITA:        {l:"En visita",        bg:"#dbeafe", fg:"#1e40af"},
+  VISITA_REALIZADA: {l:"Visita realizada", bg:"#ede9fe", fg:"#6d28d9"},
+  EN_ELABORACION:   {l:"En elaboración",   bg:"#ccfbf1", fg:"#0f766e"},
+  PENDIENTE_FIRMA:  {l:"Pendiente firma",  bg:"#fef3c7", fg:"#92400e"},
+  RESUELTO:         {l:"Resuelto",         bg:"#d1fae5", fg:"#065f46"}
+};
+const TRANSICIONES = {
+  VISITA_REALIZADA:["EN_ELABORACION","Iniciar elaboración","El funcionario empezará a elaborar el certificado."],
+  EN_ELABORACION:  ["PENDIENTE_FIRMA","Enviar a firma","El certificado fue elaborado y pasa al Secretario para firma."],
+  PENDIENTE_FIRMA: ["RESUELTO","Marcar como firmado","El Secretario firmó. Quedará listo para entregar."]
+};
+const ALL_PERMS = ["mod_estratificacion","mod_secretaria","mod_entrega","mod_consolidado","mod_dashboard","mod_ajustes",
+  "acc_editar","acc_borrar","acc_generar_pdf","acc_editar_certificado","acc_marcar_firmado","acc_asignar",
+  "acc_ver_fotos","acc_entrega","acc_consolidado","acc_alertas_visita","es_admin_sistema"];
+
+/* ══════════ UTILIDADES ══════════ */
+const $ = id => document.getElementById(id);
+const esc = s => String(s??"").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("show"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("show"),2600); }
+async function sha256(s){
+  const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return [...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+function fmtFecha(s){ if(!s) return "—"; try{ const d=new Date(s.length<=10? s+"T12:00:00": s.replace(" ","T")); return d.toLocaleDateString("es-CO",{day:"2-digit",month:"short",year:"numeric"});}catch(e){return s;} }
+function diasRestantes(venc){
+  if(!venc) return null;
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  const v=new Date(venc+"T00:00:00");
+  return Math.round((v-hoy)/86400000);
+}
+function sumarDiasHabiles(fecha, n){
+  const d=new Date(fecha+"T12:00:00"); let c=0;
+  while(c<n){ d.setDate(d.getDate()+1);
+    const dia=d.getDay(), iso=d.toISOString().slice(0,10);
+    if(dia!==0 && dia!==6 && !FESTIVOS.includes(iso)) c++;
+  }
+  return d.toISOString().slice(0,10);
+}
+/* Resolver URLs (mismo criterio que resolver_url_cloudinary del escritorio,
+   pero por PATRÓN en vez de mapa: caudi/radicados/<tipo>/<id>/<archivo>) */
+function sanId(id){ return String(id||"").replace(/[^a-zA-Z0-9_.-]/g,"_"); }
+function resolverURL(url, docId, campo){
+  if(!url || typeof url!=="string") return url;
+  if(url.includes("res.cloudinary.com") && url.includes("/image/upload/") && url.toLowerCase().endsWith(".pdf"))
+    return url.replace("/image/upload/","/raw/upload/");
+  const esFirebase = ["firebasestorage.googleapis.com","storage.googleapis.com","firebasestorage.app"].some(d=>url.includes(d));
+  if(!esFirebase || !docId) return url;
+  const id = sanId(docId);
+  if(campo==="pdf_entrada")   return `https://res.cloudinary.com/${CLOUDINARY_CLOUD}/raw/upload/caudi/radicados/entradas/${id}/entrada.pdf`;
+  if(campo==="pdf_respuesta") return `https://res.cloudinary.com/${CLOUDINARY_CLOUD}/raw/upload/caudi/radicados/respuestas/${id}/respuesta.pdf`;
+  if(campo && campo.startsWith("fotos_visita."))
+    return `https://res.cloudinary.com/${CLOUDINARY_CLOUD}/image/upload/caudi/radicados/visitas/${id}/${campo.split(".")[1]}.jpg`;
+  return url;
+}
+async function subirCloudinary(file, folder, publicId){
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("upload_preset", CLOUDINARY_PRESET);
+  fd.append("folder", folder);
+  if(publicId) fd.append("public_id", publicId);
+  const tipo = file.type==="application/pdf" ? "raw" : "image";
+  const r = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/${tipo}/upload`, {method:"POST", body:fd});
+  const j = await r.json();
+  if(!j.secure_url) throw new Error(j.error?.message || "Cloudinary no devolvió URL");
+  return j.secure_url;
+}
+function nowLocal(){ const d=new Date(),p=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; }
+function derivarPermisos(ud){
+  if(ud.username==="admin"){ const o={}; ALL_PERMS.forEach(k=>o[k]=true); return o; }
+  const o={}; ALL_PERMS.forEach(k=>o[k]=false);
+  if(ud.permisos && typeof ud.permisos==="object") for(const k in ud.permisos) if(k in o) o[k]=!!ud.permisos[k];
+  return o;
+}
+function can(p){ return !!PERMS[p]; }
+function radRef(rnum){ return db.collection(P.radicados).doc(String(rnum).replace(/\//g,"-")); }
+async function updRadicado(rnum, updates, sinTs){
+  const u = sinTs? updates : {...updates, _updated_at:new Date().toISOString()};
+  await radRef(rnum).update(u);
+  const r = RADICADOS.find(x=>x.numero_radicado===rnum); if(r) Object.assign(r,updates);
+}
+async function logAuditoria(rnum, accion, detalle){
+  const e = {ts:new Date().toISOString(), accion, usuario:USER.username, detalle:detalle||""};
+  try{ await radRef(rnum).update({auditoria: firebase.firestore.FieldValue.arrayUnion(e)});
+       const r=RADICADOS.find(x=>x.numero_radicado===rnum); if(r){ (r.auditoria=r.auditoria||[]).push(e); }
+  }catch(err){ console.warn("auditoria",err); }
+}
+
+/* ══════════ LOGIN ══════════ */
+let loginAttempts=0, loginBlockedUntil=0;
+async function doLogin(){
+  const u=$("lgUser").value.trim(), p=$("lgPass").value;
+  const msg=$("loginMsg");
+  if(Date.now()<loginBlockedUntil){ msg.textContent=`⛔ Bloqueado. Espere ${Math.ceil((loginBlockedUntil-Date.now())/1000)}s`; return; }
+  if(!u||!p){ msg.textContent="Ingrese usuario y contraseña"; return; }
+  $("lgBtn").disabled=true; msg.textContent="Verificando…";
+  try{
+    const snap = await db.collection(P.users).doc(u).get();
+    const ud = snap.exists? snap.data() : null;
+    const hash = await sha256(p);
+    let ok=false;
+    if(ud && ud.password){
+      if(ud.password.length!==64){ ok = (ud.password===p); }   // clave vieja sin hash
+      else ok = (ud.password===hash);
+    }
+    if(ok){
+      USER = {username:u, ...ud}; PERMS = derivarPermisos(USER);
+      localStorage.setItem("caudi_session", JSON.stringify({username:u, name:ud.name||u}));
+      msg.textContent="";
+      await startApp();
+    }else{
+      loginAttempts++;
+      if(loginAttempts>=5){ loginBlockedUntil=Date.now()+30000; loginAttempts=0; msg.textContent="⛔ Demasiados intentos. Bloqueado 30s"; }
+      else msg.textContent=`Usuario o clave incorrectos (${5-loginAttempts} intentos restantes)`;
+    }
+  }catch(e){ console.error(e); msg.textContent="Error de conexión: "+(e.message||e); }
+  $("lgBtn").disabled=false;
+}
+async function tryResume(){
+  const s = localStorage.getItem("caudi_session");
+  if(!s) return;
+  try{
+    const {username} = JSON.parse(s);
+    const snap = await db.collection(P.users).doc(username).get();
+    if(snap.exists){ USER={username, ...snap.data()}; PERMS=derivarPermisos(USER); await startApp(); }
+  }catch(e){ console.warn("resume",e); }
+}
+function logout(){ localStorage.removeItem("caudi_session"); location.reload(); }
+
+/* ══════════ DATOS ══════════ */
+async function refreshAll(manual){
+  if(manual) toast("Actualizando…");
+  try{
+    const [rs, hs, us, bs, ss] = await Promise.all([
+      db.collection(P.radicados).get(),
+      db.collection(P.history).orderBy("fecha_generacion","desc").limit(HISTORY_LIMIT).get().catch(()=>db.collection(P.history).limit(HISTORY_LIMIT).get()),
+      db.collection(P.users).get(),
+      db.doc(P.barrios).get(),
+      db.doc(P.settings).get()
+    ]);
+    RADICADOS = rs.docs.map(d=>({_id:d.id, ...d.data()}));
+    HISTORY   = hs.docs.map(d=>({id:d.id, ...d.data()}));
+    HISTORY.sort((a,b)=>(b.fecha_generacion||"").localeCompare(a.fecha_generacion||""));
+    USERS     = us.docs.map(d=>({username:d.id, ...d.data()}));
+    BARRIOS   = (bs.exists && bs.data().lista) || [];
+    SETTINGS  = ss.exists? ss.data() : {};
+    lastFetch = Date.now();
+    render();
+    if(manual) toast("✓ Datos actualizados");
+  }catch(e){ console.error(e); toast("Error cargando datos: "+(e.message||e)); }
+}
+
+async function startApp(){
+  $("loginScreen").classList.add("hidden");
+  $("app").classList.remove("hidden");
+  $("hUser").textContent = USER.name || USER.username;
+  buildTabs();
+  $("main").innerHTML = '<div class="loader"></div>';
+  await refreshAll(false);
+  document.addEventListener("visibilitychange",()=>{ if(!document.hidden && Date.now()-lastFetch>300000) refreshAll(false); });
+}
+
+/* ══════════ NAVEGACIÓN ══════════ */
+function buildTabs(){
+  const tabs=[];
+  if(can("mod_dashboard"))      tabs.push(["inicio","🏠","Inicio"]);
+  if(can("mod_secretaria")||can("mod_estratificacion")) tabs.push(["radicados","📂","Radicados"]);
+  tabs.push(["certs","📜","Certificados"]);
+  if(can("mod_entrega"))        tabs.push(["entrega","🤝","Entrega"]);
+  tabs.push(["mas","☰","Más"]);
+  if(!tabs.some(t=>t[0]===tab)) tab=tabs[0][0];
+  $("tabbar").innerHTML = tabs.map(t=>
+    `<button data-t="${t[0]}" class="${tab===t[0]?'active':''}" onclick="goTab('${t[0]}')"><span class="ico">${t[1]}</span>${t[2]}</button>`).join("");
+}
+function goTab(t){ tab=t; buildTabs(); render(); window.scrollTo(0,0); }
+function render(){
+  const m=$("main"); $("fab").classList.add("hidden");
+  if(tab==="inicio") renderInicio(m);
+  else if(tab==="radicados") renderRadicados(m);
+  else if(tab==="certs") renderCerts(m);
+  else if(tab==="entrega") renderEntrega(m);
+  else renderMas(m);
+}
+
+/* ══════════ INICIO / DASHBOARD ══════════ */
+function renderInicio(m){
+  const cnt = e => RADICADOS.filter(r=>r.estado===e).length;
+  const ahora=new Date(), mesAct=ahora.toISOString().slice(0,7);
+  const certsMes = HISTORY.filter(h=>(h.fecha_generacion||"").startsWith(mesAct));
+  const entregadosMes = certsMes.filter(h=>h.entregado).length;
+  const porVencer = RADICADOS.filter(r=>{
+    if(["RESUELTO"].includes(r.estado)) return false;
+    const d=diasRestantes(r.fecha_vencimiento); return d!==null && d<=3;
+  }).sort((a,b)=>(a.fecha_vencimiento||"").localeCompare(b.fecha_vencimiento||""));
+
+  // barras últimos 6 meses
+  const meses=[]; for(let i=5;i>=0;i--){ const d=new Date(ahora.getFullYear(),ahora.getMonth()-i,1);
+    meses.push({k:d.toISOString().slice(0,7), l:d.toLocaleDateString("es-CO",{month:"short"})}); }
+  const counts = meses.map(x=>HISTORY.filter(h=>(h.fecha_generacion||"").startsWith(x.k)).length);
+  const max = Math.max(...counts,1);
+
+  m.innerHTML = `
+  <div class="secTitle">Hola, ${esc((USER.name||USER.username).split(" ")[0])} 👋 <small>${ahora.toLocaleDateString("es-CO",{weekday:"long",day:"numeric",month:"long"})}</small></div>
+  <div class="statGrid">
+    <div class="stat" style="background:linear-gradient(135deg,#d97706,#b45309)"><div class="v">${cnt("PENDIENTE")}</div><div class="l">Radicados pendientes</div></div>
+    <div class="stat" style="background:linear-gradient(135deg,#1d4ed8,#1e3a8a)"><div class="v">${cnt("EN_VISITA")+cnt("VISITA_REALIZADA")}</div><div class="l">En proceso de visita</div></div>
+    <div class="stat" style="background:linear-gradient(135deg,#7c3aed,#5b21b6)"><div class="v">${cnt("PENDIENTE_FIRMA")+cnt("EN_ELABORACION")}</div><div class="l">En elaboración / firma</div></div>
+    <div class="stat" style="background:linear-gradient(135deg,#059669,#047857)"><div class="v">${cnt("RESUELTO")}</div><div class="l">Resueltos</div></div>
+  </div>
+  ${porVencer.length? `<div class="card" style="border-left:4px solid var(--danger)">
+      <b style="font-size:14px">⚠️ ${porVencer.length} radicado(s) por vencer (≤ 3 días)</b>
+      <div class="sub">${porVencer.slice(0,5).map(r=>`<div onclick="openRad('${esc(r.numero_radicado)}')" style="padding:4px 0;cursor:pointer"><b>${esc(r.numero_radicado)}</b> — ${esc(r.remitente||"")} · vence ${fmtFecha(r.fecha_vencimiento)}</div>`).join("")}</div>
+    </div>`:""}
+  <div class="card">
+    <b style="font-size:14px">Certificados por mes</b>
+    <div class="barChart">${meses.map((x,i)=>`<div class="bcol"><span class="bv">${counts[i]||""}</span><div class="bar" style="height:${Math.round(counts[i]/max*100)}%"></div><span class="bl">${x.l}</span></div>`).join("")}</div>
+  </div>
+  <div class="card">
+    <b style="font-size:14px">Este mes</b>
+    <div class="kv"><b>Certificados generados</b><span>${certsMes.length}</span></div>
+    <div class="kv"><b>Entregados</b><span>${entregadosMes}</span></div>
+    <div class="kv" style="border:none"><b>Total radicados registrados</b><span>${RADICADOS.length}</span></div>
+  </div>`;
+}
+
+/* ══════════ RADICADOS ══════════ */
+function renderRadicados(m){
+  const filtros = ["TODOS",...Object.keys(ESTADOS)];
+  m.innerHTML = `
+  <div class="secTitle">Radicados <small>${RADICADOS.length} en total</small></div>
+  <div class="searchRow"><input id="qRad" placeholder="🔎 Buscar radicado, remitente, cédula…" oninput="paintRadList()"></div>
+  <div class="filterChips">${filtros.map(f=>`<button class="${radFilter===f?'on':''}" onclick="radFilter='${f}';renderRadicados(document.getElementById('main'))">${f==="TODOS"?"Todos":ESTADOS[f].l}</button>`).join("")}</div>
+  <div id="radList"></div>`;
+  paintRadList();
+  if(can("acc_editar")){ const f=$("fab"); f.classList.remove("hidden"); f.onclick = openNuevoRadicado; }
+}
+function paintRadList(){
+  const q = ($("qRad")?.value||"").toLowerCase();
+  let list = RADICADOS.filter(r => radFilter==="TODOS" || r.estado===radFilter);
+  if(q) list = list.filter(r => [r.numero_radicado,r.remitente,r.cedula,r.direccion,r.asunto].some(v=>(v||"").toLowerCase().includes(q)));
+  list = [...list].sort((a,b)=>(b.fecha_registro_app||"").localeCompare(a.fecha_registro_app||""));
+  $("radList").innerHTML = list.length? list.slice(0,150).map(r=>{
+    const e = ESTADOS[r.estado]||{l:r.estado||"?",bg:"#e2e8f0",fg:"#334155"};
+    const dr = diasRestantes(r.fecha_vencimiento);
+    const venc = (r.estado!=="RESUELTO" && dr!==null)? (dr<0? `<b style="color:var(--danger)">Vencido hace ${-dr}d</b>` : dr<=3? `<b style="color:var(--warning)">Vence en ${dr}d</b>` : `Vence ${fmtFecha(r.fecha_vencimiento)}`):"";
+    return `<div class="card" onclick="openRad('${esc(r.numero_radicado)}')">
+      <div class="titleRow"><b>📂 ${esc(r.numero_radicado)}</b><span class="chip" style="background:${e.bg};color:${e.fg}">${e.l}</span></div>
+      <div class="sub">${esc(r.remitente||"Sin remitente")}${r.cedula? " · CC "+esc(r.cedula):""}<br>${venc}</div>
+    </div>`;
+  }).join("") : `<div class="empty"><span class="big">📭</span>No hay radicados con este filtro</div>`;
+}
+
+function sheet(title, bodyHTML){
+  $("sheetHost").innerHTML = `<div class="sheetWrap" onclick="if(event.target===this)closeSheet()">
+    <div class="sheet"><div class="sheetHead"><h3>${title}</h3><button class="iconBtn" style="background:var(--bg);color:var(--text)" onclick="closeSheet()">✕</button></div>
+    <div class="sheetBody">${bodyHTML}</div></div></div>`;
+}
+function closeSheet(){ $("sheetHost").innerHTML=""; }
+
+function openRad(rnum){
+  const r = RADICADOS.find(x=>x.numero_radicado===rnum); if(!r) return;
+  const e = ESTADOS[r.estado]||{l:r.estado,bg:"#e2e8f0",fg:"#334155"};
+  const fotos = r.fotos_visita||{};
+  const fotoKeys = Object.keys(fotos);
+  const tr = TRANSICIONES[r.estado];
+  const pdfE = r.pdf_entrada? resolverURL(r.pdf_entrada, rnum, "pdf_entrada"):"";
+  const pdfR = r.pdf_respuesta && !String(r.pdf_respuesta).startsWith("JVBER")? resolverURL(r.pdf_respuesta, rnum, "pdf_respuesta"):"";
+  const aud = (r.auditoria||[]).slice().reverse();
+
+  sheet(`📂 ${esc(rnum)}`, `
+    <div style="margin-bottom:8px"><span class="chip" style="background:${e.bg};color:${e.fg};font-size:12px">${e.l}</span></div>
+    <div class="kv"><b>Remitente</b><span>${esc(r.remitente||"—")}</span></div>
+    <div class="kv"><b>Cédula</b><span>${esc(r.cedula||"—")}</span></div>
+    <div class="kv"><b>Dirección</b><span>${esc(r.direccion||"—")}</span></div>
+    <div class="kv"><b>Teléfono</b><span>${r.telefono? `<a href="tel:${esc(r.telefono)}">${esc(r.telefono)}</a>`:"—"}${r.telefono2? " / "+esc(r.telefono2):""}</span></div>
+    <div class="kv"><b>Email</b><span>${esc(r.email||"—")}</span></div>
+    <div class="kv"><b>Asunto</b><span>${esc(r.asunto||"—")}</span></div>
+    <div class="kv"><b>Destino</b><span>${esc(r.proceso_destino||"—")} ${r.responsable? "· "+esc(r.responsable):""}</span></div>
+    <div class="kv"><b>Radicación</b><span>${fmtFecha(r.fecha_radicacion_fisica)}</span></div>
+    <div class="kv"><b>Vencimiento</b><span>${fmtFecha(r.fecha_vencimiento)}</span></div>
+    <div class="kv"><b>Registrado por</b><span>${esc(r.registrado_por||"—")}</span></div>
+    ${r.visita_asignada_a? `<div class="kv"><b>Visitador</b><span>${esc(r.visita_asignada_a)}</span></div>`:""}
+    ${r.respondido_por? `<div class="kv"><b>Respondido por</b><span>${esc(r.respondido_por)}</span></div>`:""}
+
+    ${can("acc_ver_fotos") && fotoKeys.length? `<label style="margin-top:14px">Fotos de la visita</label>
+      <div class="fotoGrid">${fotoKeys.map(k=>{const u=resolverURL(fotos[k],rnum,"fotos_visita."+k);
+        return `<a href="${esc(u)}" target="_blank"><img src="${esc(u)}" loading="lazy" onerror="this.parentNode.style.display='none'"><div class="fl">${esc(k)}</div></a>`;}).join("")}</div>`:""}
+
+    <div class="btnRow">
+      ${pdfE? `<button class="btn gray" onclick="window.open('${esc(pdfE)}','_blank')">📄 PDF entrada</button>`:""}
+      ${pdfR? `<button class="btn gray" onclick="window.open('${esc(pdfR)}','_blank')">📑 PDF respuesta</button>`:""}
+      ${tr && (r.estado!=="PENDIENTE_FIRMA"? can("acc_editar"): can("acc_marcar_firmado"))?
+        `<button class="btn green wide" onclick="avanzarEstado('${esc(rnum)}')">➡️ ${tr[1]}</button>`:""}
+      ${r.estado==="PENDIENTE" && can("acc_asignar")? `<button class="btn violet wide" onclick="asignarVisita('${esc(rnum)}')">🚶 Asignar visita</button>`:""}
+      ${can("acc_editar")? `<button class="btn" onclick="editarRad('${esc(rnum)}')">✏️ Editar</button>`:""}
+      ${can("acc_borrar")? `<button class="btn red" onclick="borrarRad('${esc(rnum)}')">🗑 Eliminar</button>`:""}
+    </div>
+
+    ${aud.length? `<label style="margin-top:16px">Auditoría (${aud.length})</label>
+      ${aud.slice(0,15).map(a=>`<div class="audItem"><b>${esc(a.accion)}</b> — ${esc(a.usuario)}<br>${esc(a.detalle||"")}<div class="ts">${fmtFecha(a.ts)} ${(a.ts||"").slice(11,16)}</div></div>`).join("")}`:""}
+  `);
+}
+
+function avanzarEstado(rnum){
+  const r = RADICADOS.find(x=>x.numero_radicado===rnum); if(!r) return;
+  const tr = TRANSICIONES[r.estado]; if(!tr) return;
+  if(!confirm(`Radicado: ${rnum}\n\n${tr[2]}\n¿Confirmar?`)) return;
+  const updates = {estado:tr[0]};
+  if(tr[0]==="EN_ELABORACION") updates.fecha_elaboracion = new Date().toISOString();
+  if(tr[0]==="RESUELTO") updates.fecha_firma = new Date().toISOString();
+  updRadicado(rnum, updates).then(()=>{
+    logAuditoria(rnum, "CAMBIO_ESTADO", `${r.estado} → ${tr[0]} (móvil)`);
+    toast(`✓ ${tr[1]}`); closeSheet(); render();
+  }).catch(e=>toast("Error: "+e.message));
+}
+
+function asignarVisita(rnum){
+  const ops = USERS.map(u=>`<option value="${esc(u.username)}">${esc(u.name||u.username)} (${esc(u.username)})</option>`).join("");
+  sheet(`🚶 Asignar visita — ${esc(rnum)}`, `
+    <label>Visitador</label><select id="selVis">${ops}</select>
+    <button class="btn wide" style="width:100%;margin-top:16px" onclick="confAsignar('${esc(rnum)}')">Asignar y pasar a EN VISITA</button>`);
+}
+function confAsignar(rnum){
+  const v = $("selVis").value;
+  updRadicado(rnum, {estado:"EN_VISITA", visita_asignada_a:v, fecha_asignacion_visita: nowLocal()}, true)
+    .then(()=>{ logAuditoria(rnum,"VISITA_ASIGNADA",`Asignada a ${v} (móvil)`); toast("✓ Visita asignada"); closeSheet(); render(); })
+    .catch(e=>toast("Error: "+e.message));
+}
+
+function borrarRad(rnum){
+  if(!confirm(`¿Eliminar el radicado ${rnum}?\nEsta acción no se puede deshacer.`)) return;
+  radRef(rnum).delete().then(()=>{
+    RADICADOS = RADICADOS.filter(r=>r.numero_radicado!==rnum);
+    toast("✓ Radicado eliminado"); closeSheet(); render();
+  }).catch(e=>toast("Error: "+e.message));
+}
+
+function formRad(r){
+  return `
+    <label>N° Radicado *</label><input id="fRad" value="${esc(r.numero_radicado||"")}" ${r._edit?"disabled":""}>
+    <label>Fecha radicación física</label><input id="fFecha" type="date" value="${esc((r.fecha_radicacion_fisica||"").slice(0,10) || new Date().toISOString().slice(0,10))}">
+    <label>Remitente *</label><input id="fRem" value="${esc(r.remitente||"")}" style="text-transform:uppercase">
+    <label>Cédula</label><input id="fCed" inputmode="numeric" value="${esc(r.cedula||"")}">
+    <label>Teléfono</label><input id="fTel" inputmode="tel" value="${esc(r.telefono||"")}">
+    <label>Teléfono 2</label><input id="fTel2" inputmode="tel" value="${esc(r.telefono2||"")}">
+    <label>Email</label><input id="fMail" inputmode="email" value="${esc(r.email||"")}">
+    <label>Dirección</label><input id="fDir" value="${esc(r.direccion||"")}" style="text-transform:uppercase">
+    <label>Proceso destino</label>
+    <select id="fDest">${["Estratificación","Secretaría de Planeación","Servicios Públicos","Otro"].map(o=>`<option ${r.proceso_destino===o?"selected":""}>${o}</option>`).join("")}</select>
+    <label>Responsable</label><input id="fResp" value="${esc(r.responsable||"")}">
+    <label>Asunto</label><textarea id="fAsu" rows="3">${esc(r.asunto||"")}</textarea>`;
+}
+function openNuevoRadicado(){
+  sheet("➕ Nuevo radicado", formRad({}) + `
+    <label>PDF de entrada (opcional)</label>
+    <input id="fPdf" type="file" accept="application/pdf">
+    <button class="btn wide" style="width:100%;margin-top:18px" id="btnSaveRad" onclick="guardarNuevoRad()">Guardar radicado</button>`);
+}
+async function guardarNuevoRad(){
+  const rad=$("fRad").value.trim(), rem=$("fRem").value.trim().toUpperCase();
+  if(!rad||!rem){ toast("Radicado y remitente son obligatorios"); return; }
+  if(RADICADOS.some(r=>r.numero_radicado===rad)){ toast("Ese radicado ya existe"); return; }
+  const btn=$("btnSaveRad"); btn.disabled=true; btn.textContent="Guardando…";
+  try{
+    const fRad = $("fFecha").value;
+    let url_entrada = "";
+    const file = $("fPdf").files[0];
+    if(file){ btn.textContent="Subiendo PDF…"; url_entrada = await subirCloudinary(file, `caudi/radicados/entradas/${sanId(rad)}`, "entrada"); }
+    const data = {
+      numero_radicado: rad,
+      fecha_radicacion_fisica: fRad,
+      fecha_registro_app: nowLocal(),
+      fecha_vencimiento: sumarDiasHabiles(fRad, 15),
+      remitente: rem, cedula: $("fCed").value.trim(),
+      proceso_destino: $("fDest").value, responsable: $("fResp").value.trim(),
+      asunto: $("fAsu").value, telefono: $("fTel").value.trim(), telefono2: $("fTel2").value.trim(),
+      email: $("fMail").value.trim(), direccion: $("fDir").value.trim().toUpperCase(),
+      estado: "PENDIENTE", pdf_entrada: url_entrada, pdf_respuesta: "",
+      registrado_por: USER.username,
+      _updated_at: new Date().toISOString()
+    };
+    await radRef(rad).set(data);
+    RADICADOS.unshift(data);
+    await logAuditoria(rad,"RADICADO",`Registrado por ${USER.username} (móvil)`);
+    toast(`✓ Radicado guardado. Vence: ${fmtFecha(data.fecha_vencimiento)}`);
+    closeSheet(); render();
+  }catch(e){ toast("Error: "+(e.message||e)); btn.disabled=false; btn.textContent="Guardar radicado"; }
+}
+function editarRad(rnum){
+  const r = RADICADOS.find(x=>x.numero_radicado===rnum); if(!r) return;
+  sheet(`✏️ Editar — ${esc(rnum)}`, formRad({...r,_edit:true}) + `
+    <button class="btn wide" style="width:100%;margin-top:18px" onclick="guardarEdicionRad('${esc(rnum)}')">Guardar cambios</button>`);
+}
+function guardarEdicionRad(rnum){
+  const updates = {
+    fecha_radicacion_fisica: $("fFecha").value,
+    remitente: $("fRem").value.trim().toUpperCase(), cedula: $("fCed").value.trim(),
+    telefono: $("fTel").value.trim(), telefono2: $("fTel2").value.trim(),
+    email: $("fMail").value.trim(), direccion: $("fDir").value.trim().toUpperCase(),
+    proceso_destino: $("fDest").value, responsable: $("fResp").value.trim(), asunto: $("fAsu").value
+  };
+  updRadicado(rnum, updates).then(()=>{
+    logAuditoria(rnum,"EDITADO",`Editado por ${USER.username} (móvil)`);
+    toast("✓ Cambios guardados"); closeSheet(); render();
+  }).catch(e=>toast("Error: "+e.message));
+}
+
+/* ══════════ CERTIFICADOS (HISTORIAL) ══════════ */
+function renderCerts(m){
+  m.innerHTML = `
+  <div class="secTitle">Certificados <small>últimos ${HISTORY.length}</small></div>
+  <div class="searchRow"><input id="qCert" placeholder="🔎 Nombre, cédula, consecutivo, radicado…" oninput="paintCertList()"></div>
+  <div id="certList"></div>`;
+  paintCertList();
+}
+function paintCertList(){
+  const q = ($("qCert")?.value||"").toLowerCase();
+  let list = HISTORY;
+  if(q) list = list.filter(h => [h.Nombre,h["Número"],h.Consecutivo,h.Radicado,h.cert_code,h.Hist_IDPredio].some(v=>String(v||"").toLowerCase().includes(q)));
+  $("certList").innerHTML = list.length? list.slice(0,120).map((h,i)=>{
+    const idx = HISTORY.indexOf(h);
+    const ent = !!h.entregado;
+    return `<div class="card" onclick="openCert(${idx})">
+      <div class="titleRow"><b>📜 ${h.IsComercial?"COM":"RES"}-${esc(h.Consecutivo||"?")} · ${esc(h.Nombre||"")}</b>
+      <span class="chip" style="background:${ent?"#d1fae5":"#ffedd5"};color:${ent?"#065f46":"#9a3412"}">${ent?"Entregado":"Pendiente"}</span></div>
+      <div class="sub">CC ${esc(h["Número"]||"—")} · ${esc(h.Barrio||"")}<br>${fmtFecha(h.fecha_generacion)} · ${esc(h.generadoPorNombre||h.generadoPorUsername||"")}</div>
+    </div>`;
+  }).join("") : `<div class="empty"><span class="big">📜</span>No hay certificados que coincidan</div>`;
+}
+function openCert(idx){
+  const h = HISTORY[idx]; if(!h) return;
+  const ent = !!h.entregado;
+  const tienePdf = !!(h.pdf_b64 || h.pdf_url);
+  const tel = h.telefono_ciudadano||"";
+  sheet(`📜 ${h.IsComercial?"Comercial":"Residencial"} N° ${esc(h.Consecutivo||"?")}`, `
+    <div style="margin-bottom:8px"><span class="chip" style="background:${ent?"#d1fae5":"#ffedd5"};color:${ent?"#065f46":"#9a3412"};font-size:12px">${ent?"ENTREGADO":"PENDIENTE DE ENTREGA"}</span></div>
+    <div class="kv"><b>Nombre</b><span>${esc(h.Nombre||"—")}</span></div>
+    <div class="kv"><b>Documento</b><span>${esc(h.Hist_TipoID||"CC")} ${esc(h["Número"]||"—")}</span></div>
+    <div class="kv"><b>Dirección</b><span>${esc(h["Dirección"]||"—")}</span></div>
+    <div class="kv"><b>Barrio</b><span>${esc(h.Barrio||"—")}</span></div>
+    <div class="kv"><b>Estrato</b><span>${esc(h.Estrato||"—")}</span></div>
+    <div class="kv"><b>Predio</b><span>${esc(h.Hist_IDPredio||h.Matricula||"—")}</span></div>
+    <div class="kv"><b>Radicado</b><span>${esc(h.Radicado||"—")}</span></div>
+    <div class="kv"><b>Código</b><span>${esc(h.cert_code||"—")}</span></div>
+    <div class="kv"><b>Generado</b><span>${fmtFecha(h.fecha_generacion)} · ${esc(h.generadoPorNombre||"")}</span></div>
+    ${ent? `<div class="kv"><b>Entregado</b><span>${fmtFecha(h.fecha_entrega)} ${h.entregado_por? "· "+esc(h.entregado_por):""}</span></div>`:""}
+    <div class="btnRow">
+      ${tienePdf? `<button class="btn gray wide" onclick="verPdfCert(${idx})">📄 Ver / descargar PDF</button>`:""}
+      ${!ent && can("acc_entrega")? `<button class="btn green wide" onclick="marcarEntregado(${idx})">🤝 Marcar como entregado</button>`:""}
+      ${ent && can("acc_entrega")? `<button class="btn amber wide" onclick="desmarcarEntregado(${idx})">↩️ Quitar marca de entrega</button>`:""}
+      ${tel? `<button class="btn violet wide" onclick="window.open('https://wa.me/57${esc(tel.replace(/[^0-9]/g,""))}','_blank')">💬 WhatsApp al ciudadano</button>`:""}
+    </div>`);
+}
+function verPdfCert(idx){
+  const h = HISTORY[idx];
+  try{
+    if(h.pdf_url){ window.open(resolverURL(h.pdf_url, h.Radicado||h.id, "pdf_respuesta"),"_blank"); return; }
+    const bin = atob(h.pdf_b64);
+    const bytes = new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([bytes],{type:"application/pdf"}));
+    window.open(url,"_blank");
+  }catch(e){ toast("No se pudo abrir el PDF: "+e.message); }
+}
+function marcarEntregado(idx){
+  const h = HISTORY[idx];
+  if(!confirm(`¿Marcar como ENTREGADO el certificado ${h.Consecutivo} de ${h.Nombre}?`)) return;
+  const u = {entregado:true, fecha_entrega:new Date().toISOString(), entregado_por:USER.username};
+  db.collection(P.history).doc(h.id).update(u)
+    .then(()=>{ Object.assign(h,u); toast("✓ Certificado entregado"); closeSheet(); render(); })
+    .catch(e=>toast("Error: "+e.message));
+}
+function desmarcarEntregado(idx){
+  const h = HISTORY[idx];
+  db.collection(P.history).doc(h.id).update({entregado:false})
+    .then(()=>{ h.entregado=false; toast("✓ Marca de entrega retirada"); closeSheet(); render(); })
+    .catch(e=>toast("Error: "+e.message));
+}
+
+/* ══════════ ENTREGA ══════════ */
+function renderEntrega(m){
+  const pend = HISTORY.filter(h=>!h.entregado);
+  m.innerHTML = `
+  <div class="secTitle">Entrega de certificados <small>${pend.length} pendientes</small></div>
+  <div class="searchRow"><input id="qEnt" placeholder="🔎 Buscar por nombre o cédula…" oninput="paintEntrega()"></div>
+  <div id="entList"></div>`;
+  paintEntrega();
+}
+function paintEntrega(){
+  const q = ($("qEnt")?.value||"").toLowerCase();
+  let pend = HISTORY.filter(h=>!h.entregado);
+  if(q) pend = pend.filter(h=>[h.Nombre,h["Número"],h.Consecutivo].some(v=>String(v||"").toLowerCase().includes(q)));
+  $("entList").innerHTML = pend.length? pend.map(h=>{
+    const idx = HISTORY.indexOf(h);
+    return `<div class="card">
+      <div class="titleRow"><b>${esc(h.Nombre||"")}</b><span class="chip" style="background:var(--primary-light);color:var(--primary-dark)">${h.IsComercial?"COM":"RES"}-${esc(h.Consecutivo)}</span></div>
+      <div class="sub">CC ${esc(h["Número"]||"—")} · ${fmtFecha(h.fecha_generacion)}</div>
+      <div class="btnRow" style="margin-top:10px">
+        <button class="btn gray" onclick="openCert(${idx})">Ver detalle</button>
+        ${can("acc_entrega")? `<button class="btn green" onclick="marcarEntregado(${idx})">🤝 Entregar</button>`:""}
+      </div></div>`;
+  }).join("") : `<div class="empty"><span class="big">🎉</span>No hay certificados pendientes de entrega</div>`;
+}
+
+/* ══════════ MÁS ══════════ */
+function renderMas(m){
+  m.innerHTML = `
+  <div class="secTitle">Más opciones</div>
+  <div class="moreList">
+    ${can("mod_consolidado")? `<button onclick="openConsolidado()"><span class="ico">🗂</span>Consolidado global (búsqueda por cédula)</button>`:""}
+    ${can("es_admin_sistema")? `<button onclick="openUsuarios()"><span class="ico">👥</span>Usuarios y permisos</button>`:""}
+    ${can("es_admin_sistema")? `<button onclick="openBarrios()"><span class="ico">📍</span>Barrios</button>`:""}
+    ${can("es_admin_sistema")? `<button onclick="openConsecutivos()"><span class="ico">🔢</span>Consecutivos</button>`:""}
+    <button onclick="openMiClave()"><span class="ico">🔑</span>Cambiar mi contraseña</button>
+    <button onclick="refreshAll(true)"><span class="ico">⟳</span>Actualizar datos</button>
+    <button onclick="logout()" style="color:var(--danger)"><span class="ico">🚪</span>Cerrar sesión</button>
+  </div>
+  <p style="text-align:center;color:var(--muted);font-size:11px;margin-top:22px">CauDi Móvil · misma base de datos que la app de escritorio<br>Generación de PDF disponible solo en escritorio (requiere Word)</p>`;
+}
+
+function openConsolidado(){
+  sheet("🗂 Consolidado global", `
+    <div class="searchRow"><input id="qCon" placeholder="Cédula, nombre o radicado…" oninput="paintConsolidado()"></div>
+    <div id="conRes"><div class="empty">Escribe para buscar en radicados y certificados</div></div>`);
+}
+function paintConsolidado(){
+  const q = $("qCon").value.toLowerCase().trim();
+  if(q.length<3){ $("conRes").innerHTML = `<div class="empty">Mínimo 3 caracteres</div>`; return; }
+  const rads = RADICADOS.filter(r=>[r.numero_radicado,r.remitente,r.cedula].some(v=>(v||"").toLowerCase().includes(q)));
+  const certs = HISTORY.filter(h=>[h.Nombre,h["Número"],h.Radicado,h.Consecutivo].some(v=>String(v||"").toLowerCase().includes(q)));
+  let html = "";
+  if(rads.length) html += `<label>Radicados (${rads.length})</label>` + rads.slice(0,20).map(r=>{
+    const e=ESTADOS[r.estado]||{l:r.estado,bg:"#e2e8f0",fg:"#334155"};
+    return `<div class="card" onclick="closeSheet();openRad('${esc(r.numero_radicado)}')"><div class="titleRow"><b>📂 ${esc(r.numero_radicado)}</b><span class="chip" style="background:${e.bg};color:${e.fg}">${e.l}</span></div><div class="sub">${esc(r.remitente||"")}</div></div>`;}).join("");
+  if(certs.length) html += `<label>Certificados (${certs.length})</label>` + certs.slice(0,20).map(h=>{
+    const idx=HISTORY.indexOf(h);
+    return `<div class="card" onclick="closeSheet();openCert(${idx})"><div class="titleRow"><b>📜 ${h.IsComercial?"COM":"RES"}-${esc(h.Consecutivo)} ${esc(h.Nombre||"")}</b></div><div class="sub">CC ${esc(h["Número"]||"")} · ${fmtFecha(h.fecha_generacion)}</div></div>`;}).join("");
+  $("conRes").innerHTML = html || `<div class="empty">Sin resultados para "${esc(q)}"</div>`;
+}
+
+/* ----- Usuarios (admin) ----- */
+function openUsuarios(){
+  sheet("👥 Usuarios", `
+    <button class="btn wide" style="width:100%;margin-bottom:12px" onclick="formUsuario(null)">➕ Crear usuario</button>
+    ${USERS.map(u=>`<div class="card"><div class="titleRow"><b>${esc(u.name||u.username)}</b>
+      <span class="chip" style="background:var(--primary-light);color:var(--primary-dark)">${esc(u.username)}</span></div>
+      <div class="sub">${esc(u.area||"")} ${u.username==="admin"?"· superusuario":""}</div>
+      ${u.username!=="admin"? `<div class="btnRow" style="margin-top:9px">
+        <button class="btn" onclick='formUsuario(${JSON.stringify(u.username)})'>✏️ Editar</button>
+        <button class="btn red" onclick='borrarUsuario(${JSON.stringify(u.username)})'>🗑 Eliminar</button></div>`:""}
+    </div>`).join("")}`);
+}
+function formUsuario(username){
+  const u = username? USERS.find(x=>x.username===username) : {permisos:{}};
+  const perms = u.permisos||{};
+  sheet(username? `✏️ ${esc(username)}` : "➕ Nuevo usuario", `
+    <label>Usuario *</label><input id="uU" value="${esc(u.username||"")}" ${username?"disabled":""} autocapitalize="none">
+    <label>Nombre completo *</label><input id="uN" value="${esc(u.name||"")}">
+    <label>Área</label><input id="uA" value="${esc(u.area||"General")}">
+    <label>${username? "Nueva contraseña (dejar vacío para no cambiar)":"Contraseña *"}</label><input id="uP" type="password">
+    <label>Permisos</label>
+    <div class="permGrid">${ALL_PERMS.map(p=>`<label class="pchk"><input type="checkbox" data-p="${p}" ${perms[p]?"checked":""}>${p.replace(/^(mod_|acc_)/,"").replace(/_/g," ")}${p.startsWith("mod_")?" (módulo)":""}</label>`).join("")}</div>
+    <button class="btn wide" style="width:100%;margin-top:16px" onclick='guardarUsuario(${JSON.stringify(username)})'>Guardar</button>`);
+}
+async function guardarUsuario(username){
+  const uname = username || $("uU").value.trim();
+  const name = $("uN").value.trim();
+  if(!uname || !name){ toast("Usuario y nombre obligatorios"); return; }
+  const permisos = {}; document.querySelectorAll("[data-p]").forEach(c=>permisos[c.dataset.p]=c.checked);
+  const data = {username:uname, name, area:$("uA").value.trim()||"General", permisos};
+  const pw = $("uP").value;
+  if(!username && !pw){ toast("La contraseña es obligatoria"); return; }
+  if(pw) data.password = await sha256(pw);
+  try{
+    await db.collection(P.users).doc(uname).set(data, {merge:true});
+    const i = USERS.findIndex(x=>x.username===uname);
+    if(i>=0) Object.assign(USERS[i],data); else USERS.push(data);
+    toast("✓ Usuario guardado"); openUsuarios();
+  }catch(e){ toast("Error: "+e.message); }
+}
+function borrarUsuario(username){
+  if(!confirm(`¿Eliminar el usuario ${username}?`)) return;
+  db.collection(P.users).doc(username).delete().then(()=>{
+    USERS = USERS.filter(u=>u.username!==username);
+    toast("✓ Usuario eliminado"); openUsuarios();
+  }).catch(e=>toast("Error: "+e.message));
+}
+
+/* ----- Barrios (admin) ----- */
+function openBarrios(){
+  sheet("📍 Barrios", `
+    <div class="searchRow"><input id="nbNew" placeholder="Ej: 045 - Nombre del barrio"><button class="btn" style="flex:none" onclick="addBarrio()">➕</button></div>
+    <div id="bList">${BARRIOS.map((b,i)=>`<div class="kv"><span style="text-align:left">${esc(b)}</span><button class="btn red" style="padding:5px 10px;font-size:12px" onclick="delBarrio(${i})">🗑</button></div>`).join("")}</div>`);
+}
+async function saveBarrios(){ await db.doc(P.barrios).set({lista:BARRIOS},{merge:true}); }
+function addBarrio(){
+  const v = $("nbNew").value.trim(); if(!v) return;
+  BARRIOS.push(v); BARRIOS.sort();
+  saveBarrios().then(()=>{ toast("✓ Barrio agregado"); openBarrios(); }).catch(e=>toast("Error: "+e.message));
+}
+function delBarrio(i){
+  if(!confirm(`¿Eliminar "${BARRIOS[i]}"?`)) return;
+  BARRIOS.splice(i,1);
+  saveBarrios().then(()=>{ toast("✓ Barrio eliminado"); openBarrios(); }).catch(e=>toast("Error: "+e.message));
+}
+
+/* ----- Consecutivos (admin) ----- */
+function openConsecutivos(){
+  sheet("🔢 Consecutivos", `
+    <div class="notice">⚠️ Cambiar estos valores afecta el próximo certificado generado en el escritorio. Hazlo solo si sabes lo que haces.</div>
+    <label>Próximo consecutivo Residencial</label><input id="cR" inputmode="numeric" value="${SETTINGS.nextConsecutivoResidencial||1}">
+    <label>Próximo consecutivo Comercial</label><input id="cC" inputmode="numeric" value="${SETTINGS.nextConsecutivoComercial||1}">
+    <button class="btn wide" style="width:100%;margin-top:16px" onclick="guardarConsecutivos()">Guardar</button>`);
+}
+function guardarConsecutivos(){
+  const r=parseInt($("cR").value)||1, c=parseInt($("cC").value)||1;
+  db.doc(P.settings).set({nextConsecutivoResidencial:r, nextConsecutivoComercial:c},{merge:true})
+    .then(()=>{ SETTINGS.nextConsecutivoResidencial=r; SETTINGS.nextConsecutivoComercial=c; toast("✓ Consecutivos guardados"); closeSheet(); })
+    .catch(e=>toast("Error: "+e.message));
+}
+
+/* ----- Cambiar mi clave ----- */
+function openMiClave(){
+  sheet("🔑 Cambiar mi contraseña", `
+    <label>Contraseña actual</label><input id="pcOld" type="password">
+    <label>Nueva contraseña</label><input id="pcNew" type="password">
+    <label>Repetir nueva contraseña</label><input id="pcNew2" type="password">
+    <button class="btn wide" style="width:100%;margin-top:16px" onclick="cambiarMiClave()">Cambiar</button>`);
+}
+async function cambiarMiClave(){
+  const o=$("pcOld").value, n=$("pcNew").value, n2=$("pcNew2").value;
+  if(n.length<4){ toast("La nueva clave es muy corta"); return; }
+  if(n!==n2){ toast("Las claves nuevas no coinciden"); return; }
+  const oldHash = await sha256(o);
+  const okOld = USER.password.length===64 ? USER.password===oldHash : USER.password===o;
+  if(!okOld){ toast("La contraseña actual no es correcta"); return; }
+  const newHash = await sha256(n);
+  try{
+    await db.collection(P.users).doc(USER.username).set({password:newHash},{merge:true});
+    USER.password = newHash;
+    toast("✓ Contraseña actualizada"); closeSheet();
+  }catch(e){ toast("Error: "+e.message); }
+}
+
+/* ══════════ ARRANQUE ══════════ */
+$("lgPass").addEventListener("keydown", e=>{ if(e.key==="Enter") doLogin(); });
+tryResume();
+</script>
+</body>
+</html>

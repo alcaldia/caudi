@@ -47,6 +47,7 @@ header .brand{font-size:19px;font-weight:800;flex:1}
 header .brand span{color:#c4b5fd}
 header .userChip{font-size:12px;background:rgba(255,255,255,.18);padding:5px 11px;border-radius:99px;font-weight:600;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .iconBtn{background:rgba(255,255,255,.18);color:#fff;border-radius:10px;width:36px;height:36px;font-size:17px;flex:none}
+.iconBtn.spin{animation:spin 1s linear infinite}
 main{flex:1;padding:14px 14px calc(var(--nav-h) + env(safe-area-inset-bottom) + 20px)}
 
 /* bottom nav */
@@ -74,6 +75,7 @@ nav.tabbar button.active{color:var(--primary)}
 .empty .big{font-size:38px;display:block;margin-bottom:8px}
 .secTitle{font-size:17px;font-weight:700;margin:6px 0 12px;display:flex;align-items:center;justify-content:space-between}
 .secTitle small{font-size:12px;color:var(--muted);font-weight:600}
+.staleNote{font-size:11px;color:var(--muted);text-align:center;margin:-6px 0 10px}
 
 /* stats */
 .statGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
@@ -131,7 +133,7 @@ nav.tabbar button.active{color:var(--primary)}
   <div class="loginCard">
     <div class="loginLogo">
       <div class="brand">Cau<span>Di</span></div>
-      <p>Caucasia Digital · Certificados de Estratificación<br>Alcaldía de Caucasia — Versión Móvil</p>
+      <p>Caucasia Digital · Certificados de Estratificación<br>Alcaldía de Caucasia — Versión Móvil 2.0</p>
     </div>
     <label>Usuario</label>
     <input id="lgUser" autocomplete="username" autocapitalize="none">
@@ -147,7 +149,7 @@ nav.tabbar button.active{color:var(--primary)}
   <header class="appHeader">
     <div class="brand">Cau<span>Di</span> Móvil</div>
     <div class="userChip" id="hUser"></div>
-    <button class="iconBtn" onclick="refreshAll(true)" title="Actualizar">⟳</button>
+    <button class="iconBtn" id="btnRefresh" onclick="refreshAll(true)" title="Actualizar">⟳</button>
   </header>
   <main id="main"></main>
   <button class="fab hidden" id="fab">＋</button>
@@ -157,46 +159,97 @@ nav.tabbar button.active{color:var(--primary)}
 <div id="sheetHost"></div>
 <div id="toast"></div>
 
-<!-- Firebase compat SDK -->
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════
-   CONFIGURACIÓN — PEGA AQUÍ TU firebaseConfig
-   (Consola Firebase → Configuración del proyecto → Tus apps → Web)
-   Es el mismo que usa la PWA de visitadores.
+   CauDi Móvil 2.0 — Backend: SUPABASE (sin límite de lecturas)
+   Los PDFs y fotos viven en Cloudinary; la base solo guarda URLs.
 ══════════════════════════════════════════════════════════════ */
-const firebaseConfig = {
-  apiKey: "AIzaSyDONjZdM9RcPN20OxmlrO7Ns5I2-HoqET0",
-  authDomain: "generador-8b0f4.firebaseapp.com",
-  projectId: "generador-8b0f4",
-  storageBucket: "generador-8b0f4.firebasestorage.app",
-  messagingSenderId: "81617541502",
-  appId: "1:81617541502:web:d806aca48a23c75f7b7b2f"
-};
+const SUPABASE_URL = "https://hvmpfvjoxtyaaciyzbel.supabase.co";
+const SUPABASE_KEY = "sb_publishable_HBHsyPZOrsbTLi278H8AYw_Yw41oG2u";
 
 const CLOUDINARY_CLOUD = "dsv6yewzd";
 const CLOUDINARY_PRESET = "caudi_unsigned";
+const HISTORY_LIMIT = 50;
 
-/* Rutas Firestore — idénticas a main_v920.py */
-const P = {
-  settings: "artifacts/generador-8b0f4/public/data/config/settings",
-  barrios:  "artifacts/generador-8b0f4/public/data/config/barrios",
-  users:    "artifacts/generador-8b0f4/public/data/users",
-  history:  "artifacts/generador-8b0f4/public/data/history",
-  radicados:"artifacts/generador-8b0f4/public/data/radicados"
-};
-const HISTORY_LIMIT = 30;   // se cargan de a 30, con botón "cargar más"
-
-/* Festivos Colombia (para fecha de vencimiento +15 días hábiles) */
+/* Festivos Colombia (vencimiento a 15 días hábiles) */
 const FESTIVOS = ["2026-01-01","2026-01-12","2026-03-23","2026-04-02","2026-04-03","2026-05-01","2026-05-18","2026-06-08","2026-06-15","2026-06-29","2026-07-20","2026-08-07","2026-08-17","2026-10-12","2026-11-02","2026-11-16","2026-12-08","2026-12-25","2027-01-01","2027-01-11"];
 
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
+/* ══════════ MINI-CLIENTE SUPABASE ══════════ */
+async function sbFetch(pathQS, opts = {}){
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${pathQS}`, {
+    ...opts,
+    headers: {
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${SUPABASE_KEY}`,
+      "Content-Type": "application/json",
+      ...(opts.headers||{})
+    }
+  });
+  if(!r.ok) throw new Error(`Supabase ${r.status}: ${(await r.text()).slice(0,200)}`);
+  const txt = await r.text();
+  return txt ? JSON.parse(txt) : null;
+}
+const sbGet    = (qs)            => sbFetch(qs);
+const sbPatch  = (qs, body)      => sbFetch(qs, {method:"PATCH", body:JSON.stringify(body), headers:{"Prefer":"return=minimal"}});
+const sbUpsert = (table, body)   => sbFetch(table, {method:"POST", body:JSON.stringify(body), headers:{"Prefer":"resolution=merge-duplicates,return=minimal"}});
+const sbDelete = (qs)            => sbFetch(qs, {method:"DELETE"});
+
+/* Columnas reales de la tabla radicados (lo demás vive en `extra`) */
+const RAD_COLS = new Set(["numero_radicado","estado","remitente","cedula","direccion",
+  "telefono","telefono2","email","asunto","proceso_destino","responsable",
+  "fecha_radicacion_fisica","fecha_registro_app","fecha_vencimiento","registrado_por",
+  "visita_asignada_a","fecha_asignacion_visita","respondido_por","pdf_entrada","pdf_respuesta"]);
+
+/* fila Supabase → documento estilo app */
+function docRad(f){
+  const extra = f.extra || {};
+  const d = {...f, ...extra};
+  delete d.extra;
+  d.fotos_visita = f.fotos_visita || {};
+  d.auditoria = f.auditoria || [];
+  if(d.updated_at){ d._updated_at = d.updated_at; delete d.updated_at; }
+  return d;
+}
+const HIST_COLS = {consecutivo:"Consecutivo", is_comercial:"IsComercial", nombre:"Nombre",
+  numero_doc:"Número", tipo_id:"Hist_TipoID", direccion:"Dirección", barrio:"Barrio",
+  estrato:"Estrato", id_predio:"Hist_IDPredio", radicado:"Radicado", cert_code:"cert_code",
+  fecha_generacion:"fecha_generacion", generado_por:"generadoPorUsername",
+  generado_por_nombre:"generadoPorNombre", entregado:"entregado", fecha_entrega:"fecha_entrega",
+  entregado_por:"entregado_por", telefono_ciudadano:"telefono_ciudadano", pdf_url:"pdf_url"};
+function docHist(f){
+  const d = {id:f.id};
+  for(const [col,key] of Object.entries(HIST_COLS)){
+    let v = f[col];
+    if(col==="consecutivo"){ try{ v = (v===null||v===undefined)? "" : String(v).padStart(4,"0"); }catch(e){ v = String(v||""); } }
+    d[key] = (v===null||v===undefined)? "" : v;
+  }
+  Object.assign(d, f.extra||{});
+  d._tienePdf = !!f.pdf_url;
+  return d;
+}
+function docUser(f){
+  return {...(f.extra||{}), username:f.username, name:f.name||f.username,
+          area:f.area||"General", password:f.password||"", permisos:f.permisos||{}};
+}
+
+/* Actualización de radicado: columnas directas, lo demás a `extra` */
+async function updRadicadoSB(id, updates){
+  const cols = {}, extraUpd = {};
+  for(const [k,v] of Object.entries(updates)){
+    if(k==="fotos_visita" || k==="auditoria") cols[k] = v;
+    else if(RAD_COLS.has(k)) cols[k] = (v===null||v===undefined)? "" : String(v);
+    else extraUpd[k] = v;
+  }
+  if(Object.keys(extraUpd).length){
+    const filas = await sbGet(`radicados?id=eq.${encodeURIComponent(id)}&select=extra&limit=1`);
+    cols.extra = {...((filas&&filas[0]&&filas[0].extra)||{}), ...extraUpd};
+  }
+  await sbPatch(`radicados?id=eq.${encodeURIComponent(id)}`, cols);
+}
 
 /* ══════════ ESTADO GLOBAL ══════════ */
-let USER = null, PERMS = {}, RADICADOS = [], HISTORY = [], USERS = [], BARRIOS = [], SETTINGS = {};
-let tab = "inicio", radFilter = "TODOS", lastFetch = 0;
+let USER=null, PERMS={}, RADICADOS=[], HISTORY=[], USERS=[], BARRIOS=[], SETTINGS={};
+let tab="inicio", radFilter="TODOS", lastFetch=0, _histOffset=0, _histFin=false;
 
 const ESTADOS = {
   PENDIENTE:        {l:"Pendiente",        bg:"#ffedd5", fg:"#9a3412"},
@@ -204,7 +257,10 @@ const ESTADOS = {
   VISITA_REALIZADA: {l:"Visita realizada", bg:"#ede9fe", fg:"#6d28d9"},
   EN_ELABORACION:   {l:"En elaboración",   bg:"#ccfbf1", fg:"#0f766e"},
   PENDIENTE_FIRMA:  {l:"Pendiente firma",  bg:"#fef3c7", fg:"#92400e"},
-  RESUELTO:         {l:"Resuelto",         bg:"#d1fae5", fg:"#065f46"}
+  RESUELTO:         {l:"Resuelto",         bg:"#d1fae5", fg:"#065f46"},
+  PENDIENTE_DOC:    {l:"Pend. documentos", bg:"#fde8e8", fg:"#9b1c1c"},
+  CANCELADO_USUARIO:{l:"Cancelado",        bg:"#f3f4f6", fg:"#374151"},
+  INCOMPLETO:       {l:"Incompleto",       bg:"#fee2e2", fg:"#991b1b"}
 };
 const TRANSICIONES = {
   VISITA_REALIZADA:["EN_ELABORACION","Iniciar elaboración","El funcionario empezará a elaborar el certificado."],
@@ -227,7 +283,7 @@ function fmtFecha(s){ if(!s) return "—"; try{ const d=new Date(s.length<=10? s
 function diasRestantes(venc){
   if(!venc) return null;
   const hoy=new Date(); hoy.setHours(0,0,0,0);
-  const v=new Date(venc+"T00:00:00");
+  const v=new Date(venc.slice(0,10)+"T00:00:00");
   return Math.round((v-hoy)/86400000);
 }
 function sumarDiasHabiles(fecha, n){
@@ -238,16 +294,15 @@ function sumarDiasHabiles(fecha, n){
   }
   return d.toISOString().slice(0,10);
 }
-/* Resolver URLs (mismo criterio que resolver_url_cloudinary del escritorio,
-   pero por PATRÓN en vez de mapa: caudi/radicados/<tipo>/<id>/<archivo>) */
-function sanId(id){ return String(id||"").replace(/[^a-zA-Z0-9_.-]/g,"_"); }
+function sanId(id){ return String(id||"").replace(/\//g,"-"); }
+/* URLs legadas de Firebase Storage → Cloudinary por patrón */
 function resolverURL(url, docId, campo){
   if(!url || typeof url!=="string") return url;
   if(url.includes("res.cloudinary.com") && url.includes("/image/upload/") && url.toLowerCase().endsWith(".pdf"))
     return url.replace("/image/upload/","/raw/upload/");
   const esFirebase = ["firebasestorage.googleapis.com","storage.googleapis.com","firebasestorage.app"].some(d=>url.includes(d));
   if(!esFirebase || !docId) return url;
-  const id = sanId(docId);
+  const id = String(docId).replace(/[^a-zA-Z0-9_.-]/g,"_");
   if(campo==="pdf_entrada")   return `https://res.cloudinary.com/${CLOUDINARY_CLOUD}/raw/upload/caudi/radicados/entradas/${id}/entrada.pdf`;
   if(campo==="pdf_respuesta") return `https://res.cloudinary.com/${CLOUDINARY_CLOUD}/raw/upload/caudi/radicados/respuestas/${id}/respuesta.pdf`;
   if(campo && campo.startsWith("fotos_visita."))
@@ -274,16 +329,18 @@ function derivarPermisos(ud){
   return o;
 }
 function can(p){ return !!PERMS[p]; }
-function radRef(rnum){ return db.collection(P.radicados).doc(String(rnum).replace(/\//g,"-")); }
-async function updRadicado(rnum, updates, sinTs){
-  const u = sinTs? updates : {...updates, _updated_at:new Date().toISOString()};
-  await radRef(rnum).update(u);
+async function updRadicado(rnum, updates){
+  await updRadicadoSB(sanId(rnum), updates);
   const r = RADICADOS.find(x=>x.numero_radicado===rnum); if(r) Object.assign(r,updates);
 }
 async function logAuditoria(rnum, accion, detalle){
   const e = {ts:new Date().toISOString(), accion, usuario:USER.username, detalle:detalle||""};
-  try{ await radRef(rnum).update({auditoria: firebase.firestore.FieldValue.arrayUnion(e)});
-       const r=RADICADOS.find(x=>x.numero_radicado===rnum); if(r){ (r.auditoria=r.auditoria||[]).push(e); }
+  try{
+    const id = sanId(rnum);
+    const filas = await sbGet(`radicados?id=eq.${encodeURIComponent(id)}&select=auditoria&limit=1`);
+    const aud = [ ...((filas&&filas[0]&&filas[0].auditoria)||[]), e ];
+    await sbPatch(`radicados?id=eq.${encodeURIComponent(id)}`, {auditoria:aud});
+    const r=RADICADOS.find(x=>x.numero_radicado===rnum); if(r) r.auditoria = aud;
   }catch(err){ console.warn("auditoria",err); }
 }
 
@@ -296,17 +353,13 @@ async function doLogin(){
   if(!u||!p){ msg.textContent="Ingrese usuario y contraseña"; return; }
   $("lgBtn").disabled=true; msg.textContent="Verificando…";
   try{
-    const snap = await db.collection(P.users).doc(u).get();
-    const ud = snap.exists? snap.data() : null;
+    const filas = await sbGet(`users?username=eq.${encodeURIComponent(u)}&limit=1`);
+    const ud = filas && filas[0] ? docUser(filas[0]) : null;
     const hash = await sha256(p);
-    let ok=false;
-    if(ud && ud.password){
-      if(ud.password.length!==64){ ok = (ud.password===p); }   // clave vieja sin hash
-      else ok = (ud.password===hash);
-    }
+    const ok = !!(ud && ud.password && (ud.password===hash || ud.password===p));
     if(ok){
-      USER = {username:u, ...ud}; PERMS = derivarPermisos(USER);
-      localStorage.setItem("caudi_session", JSON.stringify({username:u, name:ud.name||u}));
+      USER = ud; PERMS = derivarPermisos(USER);
+      localStorage.setItem("caudi_session", JSON.stringify({username:u}));
       msg.textContent="";
       await startApp();
     }else{
@@ -322,84 +375,51 @@ async function tryResume(){
   if(!s) return;
   try{
     const {username} = JSON.parse(s);
-    const snap = await db.collection(P.users).doc(username).get();
-    if(snap.exists){ USER={username, ...snap.data()}; PERMS=derivarPermisos(USER); await startApp(); }
+    const filas = await sbGet(`users?username=eq.${encodeURIComponent(username)}&limit=1`);
+    if(filas && filas[0]){ USER=docUser(filas[0]); PERMS=derivarPermisos(USER); await startApp(); }
   }catch(e){ console.warn("resume",e); }
 }
-function logout(){ localStorage.removeItem("caudi_session"); location.reload(); }
+function logout(){ localStorage.removeItem("caudi_session"); localStorage.removeItem("caudi_datos"); location.reload(); }
 
-/* ══════════ DATOS ══════════ */
-let _histCursor = null;
-/* CLAVE PARA CELULAR: tanto el historial como los radicados pueden traer PDFs
-   completos en base64 dentro del documento (pdf_b64 / pdf_respuesta). Cargar
-   todo de golpe agota la RAM del navegador móvil y la pestaña se reinicia.
-   Por eso: se carga por tandas, se eliminan los campos gigantes apenas llegan,
-   y los PDFs se descargan individualmente solo al tocar "Ver PDF". */
-function stripBig(x){
-  const flags = {};
-  for(const k of Object.keys(x)){
-    const v = x[k];
-    if(typeof v === "string" && (k.endsWith("_b64") || v.length > 20000)){
-      flags[k] = true;
-      delete x[k];
-    }
-  }
-  return flags;
+/* ══════════ DATOS (con caché local para arranque instantáneo) ══════════ */
+function guardarCacheLocal(){
+  try{
+    localStorage.setItem("caudi_datos", JSON.stringify({
+      t:Date.now(), rad:RADICADOS, his:HISTORY, usr:USERS, bar:BARRIOS, set:SETTINGS
+    }));
+  }catch(e){ /* localStorage lleno: seguir sin caché */ }
 }
-function stripB64(d){
-  const x = d.data();
-  const flags = stripBig(x);
-  return {id:d.id, _tienePdf: !!flags.pdf_b64, ...x};
-}
-function stripRad(d){
-  const x = d.data();
-  const flags = stripBig(x);
-  return {_id:d.id, _pdfRespEmbebido: !!flags.pdf_respuesta, ...x};
-}
-async function cargarRadicados(onProgress){
-  const BATCH = 60;
-  const col = db.collection(P.radicados).orderBy(firebase.firestore.FieldPath.documentId());
-  let cursor = null, out = [];
-  while(true){
-    let q = col.limit(BATCH);
-    if(cursor) q = q.startAfter(cursor);
-    const snap = await q.get();
-    if(snap.empty) break;
-    for(const d of snap.docs) out.push(stripRad(d));
-    if(onProgress) onProgress(out.length);
-    if(snap.docs.length < BATCH) break;
-    cursor = snap.docs[snap.docs.length-1];
-  }
-  return out;
+function cargarCacheLocal(){
+  try{
+    const c = JSON.parse(localStorage.getItem("caudi_datos")||"null");
+    if(!c) return false;
+    RADICADOS=c.rad||[]; HISTORY=c.his||[]; USERS=c.usr||[]; BARRIOS=c.bar||[]; SETTINGS=c.set||{};
+    _histOffset = HISTORY.length; _histFin = false;
+    return RADICADOS.length>0 || HISTORY.length>0;
+  }catch(e){ return false; }
 }
 async function refreshAll(manual){
-  if(manual) toast("Actualizando…");
-  const showProgress = !RADICADOS.length;   // primera carga: mostrar avance
+  const btn=$("btnRefresh"); if(btn) btn.classList.add("spin");
   try{
-    // 1) Datos livianos
-    const [us, bs, ss] = await Promise.all([
-      db.collection(P.users).get(),
-      db.doc(P.barrios).get(),
-      db.doc(P.settings).get()
+    const [rs, hs, us, cfg] = await Promise.all([
+      sbGet(`radicados?order=updated_at.desc.nullslast&limit=1000`),
+      sbGet(`history?order=fecha_generacion.desc.nullslast&limit=${HISTORY_LIMIT}`),
+      sbGet(`users?order=username.asc`),
+      sbGet(`config?key=in.(settings,barrios)`)
     ]);
-    USERS    = us.docs.map(d=>({username:d.id, ...d.data()}));
-    BARRIOS  = (bs.exists && bs.data().lista) || [];
-    SETTINGS = ss.exists? ss.data() : {};
-    // 2) Historial (30, sin base64)
-    if(showProgress) $("main").innerHTML = '<div class="loader"></div><p style="text-align:center;color:var(--muted);font-size:13px">Cargando certificados…</p>';
-    const hs = await db.collection(P.history).orderBy("fecha_generacion","desc").limit(HISTORY_LIMIT).get()
-      .catch(()=>db.collection(P.history).limit(HISTORY_LIMIT).get());
-    HISTORY = hs.docs.map(stripB64);
-    HISTORY.sort((a,b)=>(b.fecha_generacion||"").localeCompare(a.fecha_generacion||""));
-    _histCursor = hs.docs.length>=HISTORY_LIMIT ? hs.docs[hs.docs.length-1] : null;
-    // 3) Radicados por tandas (sin base64)
-    RADICADOS = await cargarRadicados(n=>{
-      if(showProgress) $("main").innerHTML = `<div class="loader"></div><p style="text-align:center;color:var(--muted);font-size:13px">Cargando radicados… ${n}</p>`;
-    });
+    RADICADOS = (rs||[]).map(docRad);
+    HISTORY   = (hs||[]).map(docHist);
+    _histOffset = HISTORY.length; _histFin = HISTORY.length < HISTORY_LIMIT;
+    USERS     = (us||[]).map(docUser);
+    const cmap = Object.fromEntries((cfg||[]).map(r=>[r.key, r.value||{}]));
+    SETTINGS  = cmap.settings || {};
+    BARRIOS   = (cmap.barrios && cmap.barrios.lista) || [];
     lastFetch = Date.now();
+    guardarCacheLocal();
     render();
     if(manual) toast("✓ Datos actualizados");
   }catch(e){ console.error(e); toast("Error cargando datos: "+(e.message||e)); }
+  if(btn) btn.classList.remove("spin");
 }
 
 async function startApp(){
@@ -407,8 +427,14 @@ async function startApp(){
   $("app").classList.remove("hidden");
   $("hUser").textContent = USER.name || USER.username;
   buildTabs();
-  $("main").innerHTML = '<div class="loader"></div>';
-  await refreshAll(false);
+  /* Arranque instantáneo: pinta el caché local y refresca en segundo plano */
+  if(cargarCacheLocal()){
+    render();
+    refreshAll(false);
+  }else{
+    $("main").innerHTML = '<div class="loader"></div><p style="text-align:center;color:var(--muted);font-size:13px">Cargando datos…</p>';
+    await refreshAll(false);
+  }
   document.addEventListener("visibilitychange",()=>{ if(!document.hidden && Date.now()-lastFetch>300000) refreshAll(false); });
 }
 
@@ -441,11 +467,10 @@ function renderInicio(m){
   const certsMes = HISTORY.filter(h=>(h.fecha_generacion||"").startsWith(mesAct));
   const entregadosMes = certsMes.filter(h=>h.entregado).length;
   const porVencer = RADICADOS.filter(r=>{
-    if(["RESUELTO"].includes(r.estado)) return false;
+    if(["RESUELTO","CANCELADO_USUARIO","INCOMPLETO"].includes(r.estado)) return false;
     const d=diasRestantes(r.fecha_vencimiento); return d!==null && d<=3;
   }).sort((a,b)=>(a.fecha_vencimiento||"").localeCompare(b.fecha_vencimiento||""));
 
-  // barras últimos 6 meses
   const meses=[]; for(let i=5;i>=0;i--){ const d=new Date(ahora.getFullYear(),ahora.getMonth()-i,1);
     meses.push({k:d.toISOString().slice(0,7), l:d.toLocaleDateString("es-CO",{month:"short"})}); }
   const counts = meses.map(x=>HISTORY.filter(h=>(h.fecha_generacion||"").startsWith(x.k)).length);
@@ -453,6 +478,7 @@ function renderInicio(m){
 
   m.innerHTML = `
   <div class="secTitle">Hola, ${esc((USER.name||USER.username).split(" ")[0])} 👋 <small>${ahora.toLocaleDateString("es-CO",{weekday:"long",day:"numeric",month:"long"})}</small></div>
+  ${lastFetch? `<div class="staleNote">Actualizado ${new Date(lastFetch).toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"})}</div>`:""}
   <div class="statGrid">
     <div class="stat" style="background:linear-gradient(135deg,#d97706,#b45309)"><div class="v">${cnt("PENDIENTE")}</div><div class="l">Radicados pendientes</div></div>
     <div class="stat" style="background:linear-gradient(135deg,#1d4ed8,#1e3a8a)"><div class="v">${cnt("EN_VISITA")+cnt("VISITA_REALIZADA")}</div><div class="l">En proceso de visita</div></div>
@@ -477,11 +503,11 @@ function renderInicio(m){
 
 /* ══════════ RADICADOS ══════════ */
 function renderRadicados(m){
-  const filtros = ["TODOS",...Object.keys(ESTADOS)];
+  const filtros = ["TODOS","PENDIENTE","EN_VISITA","VISITA_REALIZADA","EN_ELABORACION","PENDIENTE_FIRMA","RESUELTO"];
   m.innerHTML = `
   <div class="secTitle">Radicados <small>${RADICADOS.length} en total</small></div>
   <div class="searchRow"><input id="qRad" placeholder="🔎 Buscar radicado, remitente, cédula…" oninput="paintRadList()"></div>
-  <div class="filterChips">${filtros.map(f=>`<button class="${radFilter===f?'on':''}" onclick="radFilter='${f}';renderRadicados(document.getElementById('main'))">${f==="TODOS"?"Todos":ESTADOS[f].l}</button>`).join("")}</div>
+  <div class="filterChips">${filtros.map(f=>`<button class="${radFilter===f?'on':''}" onclick="radFilter='${f}';renderRadicados(document.getElementById('main'))">${f==="TODOS"?"Todos":(ESTADOS[f]||{l:f}).l}</button>`).join("")}</div>
   <div id="radList"></div>`;
   paintRadList();
   if(can("acc_editar")){ const f=$("fab"); f.classList.remove("hidden"); f.onclick = openNuevoRadicado; }
@@ -494,7 +520,8 @@ function paintRadList(){
   $("radList").innerHTML = list.length? list.slice(0,150).map(r=>{
     const e = ESTADOS[r.estado]||{l:r.estado||"?",bg:"#e2e8f0",fg:"#334155"};
     const dr = diasRestantes(r.fecha_vencimiento);
-    const venc = (r.estado!=="RESUELTO" && dr!==null)? (dr<0? `<b style="color:var(--danger)">Vencido hace ${-dr}d</b>` : dr<=3? `<b style="color:var(--warning)">Vence en ${dr}d</b>` : `Vence ${fmtFecha(r.fecha_vencimiento)}`):"";
+    const cerrado = ["RESUELTO","CANCELADO_USUARIO","INCOMPLETO"].includes(r.estado);
+    const venc = (!cerrado && dr!==null)? (dr<0? `<b style="color:var(--danger)">Vencido hace ${-dr}d</b>` : dr<=3? `<b style="color:var(--warning)">Vence en ${dr}d</b>` : `Vence ${fmtFecha(r.fecha_vencimiento)}`):"";
     return `<div class="card" onclick="openRad('${esc(r.numero_radicado)}')">
       <div class="titleRow"><b>📂 ${esc(r.numero_radicado)}</b><span class="chip" style="background:${e.bg};color:${e.fg}">${e.l}</span></div>
       <div class="sub">${esc(r.remitente||"Sin remitente")}${r.cedula? " · CC "+esc(r.cedula):""}<br>${venc}</div>
@@ -515,9 +542,8 @@ function openRad(rnum){
   const fotos = r.fotos_visita||{};
   const fotoKeys = Object.keys(fotos);
   const tr = TRANSICIONES[r.estado];
-  const pdfE = r.pdf_entrada? resolverURL(r.pdf_entrada, rnum, "pdf_entrada"):"";
-  const pdfR = (r.pdf_respuesta && String(r.pdf_respuesta).startsWith("http"))? resolverURL(r.pdf_respuesta, rnum, "pdf_respuesta"):"";
-  const pdfREmbebido = r._pdfRespEmbebido || (r.pdf_respuesta && !String(r.pdf_respuesta).startsWith("http"));
+  const pdfE = (r.pdf_entrada && String(r.pdf_entrada).startsWith("http"))? resolverURL(r.pdf_entrada, sanId(rnum), "pdf_entrada"):"";
+  const pdfR = (r.pdf_respuesta && String(r.pdf_respuesta).startsWith("http"))? resolverURL(r.pdf_respuesta, sanId(rnum), "pdf_respuesta"):"";
   const aud = (r.auditoria||[]).slice().reverse();
 
   sheet(`📂 ${esc(rnum)}`, `
@@ -533,16 +559,16 @@ function openRad(rnum){
     <div class="kv"><b>Vencimiento</b><span>${fmtFecha(r.fecha_vencimiento)}</span></div>
     <div class="kv"><b>Registrado por</b><span>${esc(r.registrado_por||"—")}</span></div>
     ${r.visita_asignada_a? `<div class="kv"><b>Visitador</b><span>${esc(r.visita_asignada_a)}</span></div>`:""}
+    ${r.observaciones_visita || r.notas_visita? `<div class="kv"><b>Notas visita</b><span>${esc(r.observaciones_visita||r.notas_visita)}</span></div>`:""}
     ${r.respondido_por? `<div class="kv"><b>Respondido por</b><span>${esc(r.respondido_por)}</span></div>`:""}
 
     ${can("acc_ver_fotos") && fotoKeys.length? `<label style="margin-top:14px">Fotos de la visita</label>
-      <div class="fotoGrid">${fotoKeys.map(k=>{const u=resolverURL(fotos[k],rnum,"fotos_visita."+k);
+      <div class="fotoGrid">${fotoKeys.map(k=>{const u=resolverURL(fotos[k],sanId(rnum),"fotos_visita."+k);
         return `<a href="${esc(u)}" target="_blank"><img src="${esc(u)}" loading="lazy" onerror="this.parentNode.style.display='none'"><div class="fl">${esc(k)}</div></a>`;}).join("")}</div>`:""}
 
     <div class="btnRow">
       ${pdfE? `<button class="btn gray" onclick="window.open('${esc(pdfE)}','_blank')">📄 PDF entrada</button>`:""}
       ${pdfR? `<button class="btn gray" onclick="window.open('${esc(pdfR)}','_blank')">📑 PDF respuesta</button>`:""}
-      ${!pdfR && pdfREmbebido? `<button class="btn gray" onclick="verPdfRespuesta('${esc(rnum)}')">📑 PDF respuesta</button>`:""}
       ${tr && (r.estado!=="PENDIENTE_FIRMA"? can("acc_editar"): can("acc_marcar_firmado"))?
         `<button class="btn green wide" onclick="avanzarEstado('${esc(rnum)}')">➡️ ${tr[1]}</button>`:""}
       ${r.estado==="PENDIENTE" && can("acc_asignar")? `<button class="btn violet wide" onclick="asignarVisita('${esc(rnum)}')">🚶 Asignar visita</button>`:""}
@@ -576,15 +602,16 @@ function asignarVisita(rnum){
 }
 function confAsignar(rnum){
   const v = $("selVis").value;
-  updRadicado(rnum, {estado:"EN_VISITA", visita_asignada_a:v, fecha_asignacion_visita: nowLocal()}, true)
+  updRadicado(rnum, {estado:"EN_VISITA", visita_asignada_a:v, fecha_asignacion_visita: nowLocal()})
     .then(()=>{ logAuditoria(rnum,"VISITA_ASIGNADA",`Asignada a ${v} (móvil)`); toast("✓ Visita asignada"); closeSheet(); render(); })
     .catch(e=>toast("Error: "+e.message));
 }
 
 function borrarRad(rnum){
   if(!confirm(`¿Eliminar el radicado ${rnum}?\nEsta acción no se puede deshacer.`)) return;
-  radRef(rnum).delete().then(()=>{
+  sbDelete(`radicados?id=eq.${encodeURIComponent(sanId(rnum))}`).then(()=>{
     RADICADOS = RADICADOS.filter(r=>r.numero_radicado!==rnum);
+    guardarCacheLocal();
     toast("✓ Radicado eliminado"); closeSheet(); render();
   }).catch(e=>toast("Error: "+e.message));
 }
@@ -620,7 +647,8 @@ async function guardarNuevoRad(){
     let url_entrada = "";
     const file = $("fPdf").files[0];
     if(file){ btn.textContent="Subiendo PDF…"; url_entrada = await subirCloudinary(file, `caudi/radicados/entradas/${sanId(rad)}`, "entrada"); }
-    const data = {
+    const fila = {
+      id: sanId(rad),
       numero_radicado: rad,
       fecha_radicacion_fisica: fRad,
       fecha_registro_app: nowLocal(),
@@ -631,12 +659,13 @@ async function guardarNuevoRad(){
       email: $("fMail").value.trim(), direccion: $("fDir").value.trim().toUpperCase(),
       estado: "PENDIENTE", pdf_entrada: url_entrada, pdf_respuesta: "",
       registrado_por: USER.username,
-      _updated_at: new Date().toISOString()
+      auditoria: [{ts:new Date().toISOString(), accion:"RADICADO", usuario:USER.username, detalle:`Registrado por ${USER.username} (móvil)`}],
+      fotos_visita: {}, extra: {}
     };
-    await radRef(rad).set(data);
-    RADICADOS.unshift(data);
-    await logAuditoria(rad,"RADICADO",`Registrado por ${USER.username} (móvil)`);
-    toast(`✓ Radicado guardado. Vence: ${fmtFecha(data.fecha_vencimiento)}`);
+    await sbUpsert("radicados", fila);
+    RADICADOS.unshift(docRad(fila));
+    guardarCacheLocal();
+    toast(`✓ Radicado guardado. Vence: ${fmtFecha(fila.fecha_vencimiento)}`);
     closeSheet(); render();
   }catch(e){ toast("Error: "+(e.message||e)); btn.disabled=false; btn.textContent="Guardar radicado"; }
 }
@@ -655,6 +684,7 @@ function guardarEdicionRad(rnum){
   };
   updRadicado(rnum, updates).then(()=>{
     logAuditoria(rnum,"EDITADO",`Editado por ${USER.username} (móvil)`);
+    guardarCacheLocal();
     toast("✓ Cambios guardados"); closeSheet(); render();
   }).catch(e=>toast("Error: "+e.message));
 }
@@ -671,7 +701,7 @@ function paintCertList(){
   const q = ($("qCert")?.value||"").toLowerCase();
   let list = HISTORY;
   if(q) list = list.filter(h => [h.Nombre,h["Número"],h.Consecutivo,h.Radicado,h.cert_code,h.Hist_IDPredio].some(v=>String(v||"").toLowerCase().includes(q)));
-  $("certList").innerHTML = list.length? list.slice(0,120).map((h,i)=>{
+  $("certList").innerHTML = (list.length? list.slice(0,150).map(h=>{
     const idx = HISTORY.indexOf(h);
     const ent = !!h.entregado;
     return `<div class="card" onclick="openCert(${idx})">
@@ -679,25 +709,25 @@ function paintCertList(){
       <span class="chip" style="background:${ent?"#d1fae5":"#ffedd5"};color:${ent?"#065f46":"#9a3412"}">${ent?"Entregado":"Pendiente"}</span></div>
       <div class="sub">CC ${esc(h["Número"]||"—")} · ${esc(h.Barrio||"")}<br>${fmtFecha(h.fecha_generacion)} · ${esc(h.generadoPorNombre||h.generadoPorUsername||"")}</div>
     </div>`;
-  }).join("") : `<div class="empty"><span class="big">📜</span>No hay certificados que coincidan</div>`;
-  if(_histCursor && !q) $("certList").innerHTML += `<button class="btn gray wide" style="width:100%;margin-top:6px" onclick="cargarMasCerts()">⬇️ Cargar 30 certificados más</button>`;
+  }).join("") : `<div class="empty"><span class="big">📜</span>No hay certificados que coincidan</div>`)
+  + ((!_histFin && !q)? `<button class="btn gray wide" style="width:100%;margin-top:6px" onclick="cargarMasCerts()">⬇️ Cargar ${HISTORY_LIMIT} certificados más</button>`:"");
 }
 async function cargarMasCerts(){
-  if(!_histCursor) return;
   toast("Cargando…");
   try{
-    const hs = await db.collection(P.history).orderBy("fecha_generacion","desc")
-      .startAfter(_histCursor).limit(HISTORY_LIMIT).get();
-    HISTORY.push(...hs.docs.map(stripB64));
-    _histCursor = hs.docs.length>=HISTORY_LIMIT ? hs.docs[hs.docs.length-1] : null;
+    const hs = await sbGet(`history?order=fecha_generacion.desc.nullslast&limit=${HISTORY_LIMIT}&offset=${_histOffset}`);
+    HISTORY.push(...(hs||[]).map(docHist));
+    _histOffset += (hs||[]).length;
+    _histFin = !hs || hs.length < HISTORY_LIMIT;
+    guardarCacheLocal();
     paintCertList();
-    toast(`✓ ${hs.docs.length} certificados más`);
+    toast(`✓ ${(hs||[]).length} certificados más`);
   }catch(e){ toast("Error: "+e.message); }
 }
 function openCert(idx){
   const h = HISTORY[idx]; if(!h) return;
   const ent = !!h.entregado;
-  const tienePdf = !!(h._tienePdf || h.pdf_url || h.pdf_b64);
+  const pdf = h.pdf_url? resolverURL(h.pdf_url, h.id, "pdf_respuesta") : "";
   const tel = h.telefono_ciudadano||"";
   sheet(`📜 ${h.IsComercial?"Comercial":"Residencial"} N° ${esc(h.Consecutivo||"?")}`, `
     <div style="margin-bottom:8px"><span class="chip" style="background:${ent?"#d1fae5":"#ffedd5"};color:${ent?"#065f46":"#9a3412"};font-size:12px">${ent?"ENTREGADO":"PENDIENTE DE ENTREGA"}</span></div>
@@ -706,61 +736,30 @@ function openCert(idx){
     <div class="kv"><b>Dirección</b><span>${esc(h["Dirección"]||"—")}</span></div>
     <div class="kv"><b>Barrio</b><span>${esc(h.Barrio||"—")}</span></div>
     <div class="kv"><b>Estrato</b><span>${esc(h.Estrato||"—")}</span></div>
-    <div class="kv"><b>Predio</b><span>${esc(h.Hist_IDPredio||h.Matricula||"—")}</span></div>
+    <div class="kv"><b>Predio</b><span>${esc(h.Hist_IDPredio||"—")}</span></div>
     <div class="kv"><b>Radicado</b><span>${esc(h.Radicado||"—")}</span></div>
     <div class="kv"><b>Código</b><span>${esc(h.cert_code||"—")}</span></div>
     <div class="kv"><b>Generado</b><span>${fmtFecha(h.fecha_generacion)} · ${esc(h.generadoPorNombre||"")}</span></div>
     ${ent? `<div class="kv"><b>Entregado</b><span>${fmtFecha(h.fecha_entrega)} ${h.entregado_por? "· "+esc(h.entregado_por):""}</span></div>`:""}
     <div class="btnRow">
-      ${tienePdf? `<button class="btn gray wide" onclick="verPdfCert(${idx})">📄 Ver / descargar PDF</button>`:""}
+      ${pdf? `<button class="btn gray wide" onclick="window.open('${esc(pdf)}','_blank')">📄 Ver / descargar PDF</button>`:`<button class="btn gray wide" disabled>📄 PDF solo disponible en escritorio</button>`}
       ${!ent && can("acc_entrega")? `<button class="btn green wide" onclick="marcarEntregado(${idx})">🤝 Marcar como entregado</button>`:""}
       ${ent && can("acc_entrega")? `<button class="btn amber wide" onclick="desmarcarEntregado(${idx})">↩️ Quitar marca de entrega</button>`:""}
-      ${tel? `<button class="btn violet wide" onclick="window.open('https://wa.me/57${esc(tel.replace(/[^0-9]/g,""))}','_blank')">💬 WhatsApp al ciudadano</button>`:""}
+      ${tel? `<button class="btn violet wide" onclick="window.open('https://wa.me/57${esc(String(tel).replace(/[^0-9]/g,""))}','_blank')">💬 WhatsApp al ciudadano</button>`:""}
     </div>`);
-}
-async function verPdfCert(idx){
-  const h = HISTORY[idx];
-  try{
-    if(h.pdf_url){ window.open(resolverURL(h.pdf_url, h.Radicado||h.id, "pdf_respuesta"),"_blank"); return; }
-    toast("Descargando PDF…");
-    const snap = await db.collection(P.history).doc(h.id).get();
-    const b64 = snap.exists ? snap.data().pdf_b64 : null;
-    if(!b64){ toast("Este certificado no tiene PDF guardado"); return; }
-    abrirB64(b64, `certificado_${(h.IsComercial?"COM":"RES")}_${h.Consecutivo||""}.pdf`);
-  }catch(e){ toast("No se pudo abrir el PDF: "+e.message); }
-}
-async function verPdfRespuesta(rnum){
-  try{
-    toast("Descargando PDF…");
-    const snap = await radRef(rnum).get();
-    const v = snap.exists ? snap.data().pdf_respuesta : null;
-    if(!v){ toast("Este radicado no tiene PDF de respuesta"); return; }
-    if(String(v).startsWith("http")){ window.open(resolverURL(v, rnum, "pdf_respuesta"),"_blank"); return; }
-    abrirB64(v, `respuesta_${sanId(rnum)}.pdf`);
-  }catch(e){ toast("No se pudo abrir el PDF: "+e.message); }
-}
-function abrirB64(b64, nombre){
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
-  const url = URL.createObjectURL(new Blob([bytes],{type:"application/pdf"}));
-  const a = document.createElement("a");
-  a.href = url; a.target = "_blank"; a.download = nombre;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url), 60000);
 }
 function marcarEntregado(idx){
   const h = HISTORY[idx];
   if(!confirm(`¿Marcar como ENTREGADO el certificado ${h.Consecutivo} de ${h.Nombre}?`)) return;
   const u = {entregado:true, fecha_entrega:new Date().toISOString(), entregado_por:USER.username};
-  db.collection(P.history).doc(h.id).update(u)
-    .then(()=>{ Object.assign(h,u); toast("✓ Certificado entregado"); closeSheet(); render(); })
+  sbPatch(`history?id=eq.${encodeURIComponent(h.id)}`, u)
+    .then(()=>{ Object.assign(h,u); guardarCacheLocal(); toast("✓ Certificado entregado"); closeSheet(); render(); })
     .catch(e=>toast("Error: "+e.message));
 }
 function desmarcarEntregado(idx){
   const h = HISTORY[idx];
-  db.collection(P.history).doc(h.id).update({entregado:false})
-    .then(()=>{ h.entregado=false; toast("✓ Marca de entrega retirada"); closeSheet(); render(); })
+  sbPatch(`history?id=eq.${encodeURIComponent(h.id)}`, {entregado:false})
+    .then(()=>{ h.entregado=false; guardarCacheLocal(); toast("✓ Marca de entrega retirada"); closeSheet(); render(); })
     .catch(e=>toast("Error: "+e.message));
 }
 
@@ -802,7 +801,7 @@ function renderMas(m){
     <button onclick="refreshAll(true)"><span class="ico">⟳</span>Actualizar datos</button>
     <button onclick="logout()" style="color:var(--danger)"><span class="ico">🚪</span>Cerrar sesión</button>
   </div>
-  <p style="text-align:center;color:var(--muted);font-size:11px;margin-top:22px">CauDi Móvil · misma base de datos que la app de escritorio<br>Generación de PDF disponible solo en escritorio (requiere Word)</p>`;
+  <p style="text-align:center;color:var(--muted);font-size:11px;margin-top:22px">CauDi Móvil 2.0 · Supabase + Cloudinary<br>Misma base de datos del escritorio · Generación de PDF solo en escritorio</p>`;
 }
 
 function openConsolidado(){
@@ -810,19 +809,33 @@ function openConsolidado(){
     <div class="searchRow"><input id="qCon" placeholder="Cédula, nombre o radicado…" oninput="paintConsolidado()"></div>
     <div id="conRes"><div class="empty">Escribe para buscar en radicados y certificados</div></div>`);
 }
+let _conTimer=null;
 function paintConsolidado(){
-  const q = $("qCon").value.toLowerCase().trim();
-  if(q.length<3){ $("conRes").innerHTML = `<div class="empty">Mínimo 3 caracteres</div>`; return; }
-  const rads = RADICADOS.filter(r=>[r.numero_radicado,r.remitente,r.cedula].some(v=>(v||"").toLowerCase().includes(q)));
-  const certs = HISTORY.filter(h=>[h.Nombre,h["Número"],h.Radicado,h.Consecutivo].some(v=>String(v||"").toLowerCase().includes(q)));
-  let html = "";
-  if(rads.length) html += `<label>Radicados (${rads.length})</label>` + rads.slice(0,20).map(r=>{
-    const e=ESTADOS[r.estado]||{l:r.estado,bg:"#e2e8f0",fg:"#334155"};
-    return `<div class="card" onclick="closeSheet();openRad('${esc(r.numero_radicado)}')"><div class="titleRow"><b>📂 ${esc(r.numero_radicado)}</b><span class="chip" style="background:${e.bg};color:${e.fg}">${e.l}</span></div><div class="sub">${esc(r.remitente||"")}</div></div>`;}).join("");
-  if(certs.length) html += `<label>Certificados (${certs.length})</label>` + certs.slice(0,20).map(h=>{
-    const idx=HISTORY.indexOf(h);
-    return `<div class="card" onclick="closeSheet();openCert(${idx})"><div class="titleRow"><b>📜 ${h.IsComercial?"COM":"RES"}-${esc(h.Consecutivo)} ${esc(h.Nombre||"")}</b></div><div class="sub">CC ${esc(h["Número"]||"")} · ${fmtFecha(h.fecha_generacion)}</div></div>`;}).join("");
-  $("conRes").innerHTML = html || `<div class="empty">Sin resultados para "${esc(q)}"</div>`;
+  clearTimeout(_conTimer);
+  _conTimer = setTimeout(async ()=>{
+    const q = $("qCon").value.toLowerCase().trim();
+    if(q.length<3){ $("conRes").innerHTML = `<div class="empty">Mínimo 3 caracteres</div>`; return; }
+    const rads = RADICADOS.filter(r=>[r.numero_radicado,r.remitente,r.cedula].some(v=>(v||"").toLowerCase().includes(q)));
+    /* búsqueda en el servidor: TODO el historial, no solo lo cargado */
+    let certs = [];
+    try{
+      const enc = encodeURIComponent(`%${q}%`);
+      certs = ((await sbGet(`history?or=(nombre.ilike.${enc},numero_doc.ilike.${enc},radicado.ilike.${enc})&limit=30`))||[]).map(docHist);
+    }catch(e){
+      certs = HISTORY.filter(h=>[h.Nombre,h["Número"],h.Radicado,h.Consecutivo].some(v=>String(v||"").toLowerCase().includes(q)));
+    }
+    let html = "";
+    if(rads.length) html += `<label>Radicados (${rads.length})</label>` + rads.slice(0,20).map(r=>{
+      const e=ESTADOS[r.estado]||{l:r.estado,bg:"#e2e8f0",fg:"#334155"};
+      return `<div class="card" onclick="closeSheet();openRad('${esc(r.numero_radicado)}')"><div class="titleRow"><b>📂 ${esc(r.numero_radicado)}</b><span class="chip" style="background:${e.bg};color:${e.fg}">${e.l}</span></div><div class="sub">${esc(r.remitente||"")}</div></div>`;}).join("");
+    if(certs.length){
+      html += `<label>Certificados (${certs.length})</label>` + certs.slice(0,20).map(h=>{
+        let idx = HISTORY.findIndex(x=>x.id===h.id);
+        if(idx<0){ HISTORY.push(h); idx = HISTORY.length-1; }
+        return `<div class="card" onclick="closeSheet();openCert(${idx})"><div class="titleRow"><b>📜 ${h.IsComercial?"COM":"RES"}-${esc(h.Consecutivo)} ${esc(h.Nombre||"")}</b></div><div class="sub">CC ${esc(h["Número"]||"")} · ${fmtFecha(h.fecha_generacion)}</div></div>`;}).join("");
+    }
+    $("conRes").innerHTML = html || `<div class="empty">Sin resultados para "${esc(q)}"</div>`;
+  }, 350);
 }
 
 /* ----- Usuarios (admin) ----- */
@@ -854,21 +867,23 @@ async function guardarUsuario(username){
   const name = $("uN").value.trim();
   if(!uname || !name){ toast("Usuario y nombre obligatorios"); return; }
   const permisos = {}; document.querySelectorAll("[data-p]").forEach(c=>permisos[c.dataset.p]=c.checked);
-  const data = {username:uname, name, area:$("uA").value.trim()||"General", permisos};
+  const fila = {username:uname, name, area:$("uA").value.trim()||"General", permisos};
   const pw = $("uP").value;
   if(!username && !pw){ toast("La contraseña es obligatoria"); return; }
-  if(pw) data.password = await sha256(pw);
+  if(pw) fila.password = await sha256(pw);
   try{
-    await db.collection(P.users).doc(uname).set(data, {merge:true});
+    await sbUpsert("users", fila);
     const i = USERS.findIndex(x=>x.username===uname);
-    if(i>=0) Object.assign(USERS[i],data); else USERS.push(data);
+    if(i>=0) Object.assign(USERS[i],fila); else USERS.push({...fila, password:fila.password||""});
+    guardarCacheLocal();
     toast("✓ Usuario guardado"); openUsuarios();
   }catch(e){ toast("Error: "+e.message); }
 }
 function borrarUsuario(username){
   if(!confirm(`¿Eliminar el usuario ${username}?`)) return;
-  db.collection(P.users).doc(username).delete().then(()=>{
+  sbDelete(`users?username=eq.${encodeURIComponent(username)}`).then(()=>{
     USERS = USERS.filter(u=>u.username!==username);
+    guardarCacheLocal();
     toast("✓ Usuario eliminado"); openUsuarios();
   }).catch(e=>toast("Error: "+e.message));
 }
@@ -879,16 +894,25 @@ function openBarrios(){
     <div class="searchRow"><input id="nbNew" placeholder="Ej: 045 - Nombre del barrio"><button class="btn" style="flex:none" onclick="addBarrio()">➕</button></div>
     <div id="bList">${BARRIOS.map((b,i)=>`<div class="kv"><span style="text-align:left">${esc(b)}</span><button class="btn red" style="padding:5px 10px;font-size:12px" onclick="delBarrio(${i})">🗑</button></div>`).join("")}</div>`);
 }
-async function saveBarrios(){ await db.doc(P.barrios).set({lista:BARRIOS},{merge:true}); }
+async function saveBarrios(){
+  /* leer-mezclar-escribir para no pisar otros campos del doc barrios */
+  let value = {};
+  try{
+    const filas = await sbGet(`config?key=eq.barrios&limit=1`);
+    value = (filas && filas[0] && filas[0].value) || {};
+  }catch(e){}
+  value.lista = BARRIOS;
+  await sbUpsert("config", {key:"barrios", value});
+}
 function addBarrio(){
   const v = $("nbNew").value.trim(); if(!v) return;
   BARRIOS.push(v); BARRIOS.sort();
-  saveBarrios().then(()=>{ toast("✓ Barrio agregado"); openBarrios(); }).catch(e=>toast("Error: "+e.message));
+  saveBarrios().then(()=>{ guardarCacheLocal(); toast("✓ Barrio agregado"); openBarrios(); }).catch(e=>toast("Error: "+e.message));
 }
 function delBarrio(i){
   if(!confirm(`¿Eliminar "${BARRIOS[i]}"?`)) return;
   BARRIOS.splice(i,1);
-  saveBarrios().then(()=>{ toast("✓ Barrio eliminado"); openBarrios(); }).catch(e=>toast("Error: "+e.message));
+  saveBarrios().then(()=>{ guardarCacheLocal(); toast("✓ Barrio eliminado"); openBarrios(); }).catch(e=>toast("Error: "+e.message));
 }
 
 /* ----- Consecutivos (admin) ----- */
@@ -899,11 +923,20 @@ function openConsecutivos(){
     <label>Próximo consecutivo Comercial</label><input id="cC" inputmode="numeric" value="${SETTINGS.nextConsecutivoComercial||1}">
     <button class="btn wide" style="width:100%;margin-top:16px" onclick="guardarConsecutivos()">Guardar</button>`);
 }
-function guardarConsecutivos(){
+async function guardarConsecutivos(){
   const r=parseInt($("cR").value)||1, c=parseInt($("cC").value)||1;
-  db.doc(P.settings).set({nextConsecutivoResidencial:r, nextConsecutivoComercial:c},{merge:true})
-    .then(()=>{ SETTINGS.nextConsecutivoResidencial=r; SETTINGS.nextConsecutivoComercial=c; toast("✓ Consecutivos guardados"); closeSheet(); })
-    .catch(e=>toast("Error: "+e.message));
+  try{
+    /* leer-mezclar-escribir el documento settings completo */
+    let value = {};
+    const filas = await sbGet(`config?key=eq.settings&limit=1`);
+    value = (filas && filas[0] && filas[0].value) || {};
+    value.nextConsecutivoResidencial = r;
+    value.nextConsecutivoComercial = c;
+    await sbUpsert("config", {key:"settings", value});
+    SETTINGS = value;
+    guardarCacheLocal();
+    toast("✓ Consecutivos guardados"); closeSheet();
+  }catch(e){ toast("Error: "+e.message); }
 }
 
 /* ----- Cambiar mi clave ----- */
@@ -919,11 +952,11 @@ async function cambiarMiClave(){
   if(n.length<4){ toast("La nueva clave es muy corta"); return; }
   if(n!==n2){ toast("Las claves nuevas no coinciden"); return; }
   const oldHash = await sha256(o);
-  const okOld = USER.password.length===64 ? USER.password===oldHash : USER.password===o;
+  const okOld = (USER.password===oldHash || USER.password===o);
   if(!okOld){ toast("La contraseña actual no es correcta"); return; }
   const newHash = await sha256(n);
   try{
-    await db.collection(P.users).doc(USER.username).set({password:newHash},{merge:true});
+    await sbPatch(`users?username=eq.${encodeURIComponent(USER.username)}`, {password:newHash});
     USER.password = newHash;
     toast("✓ Contraseña actualizada"); closeSheet();
   }catch(e){ toast("Error: "+e.message); }
